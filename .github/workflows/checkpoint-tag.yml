@@ -1,0 +1,36 @@
+name: Daily checkpoint tag
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create checkpoint tag
+        run: |
+          TAG="checkpoint-$(date -u +%Y-%m-%d)"
+          # Check if there are new commits since last checkpoint
+          LAST=$(git tag -l 'checkpoint-*' --sort=-creatordate | head -1)
+          if [ -n "$LAST" ] && [ "$(git rev-parse HEAD)" = "$(git rev-parse "$LAST")" ]; then
+            echo "No new commits since $LAST — skipping."
+            exit 0
+          fi
+          # Append counter if tag exists
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            N=2
+            while git rev-parse "${TAG}-${N}" >/dev/null 2>&1; do N=$((N+1)); done
+            TAG="${TAG}-${N}"
+          fi
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "Created tag: $TAG"

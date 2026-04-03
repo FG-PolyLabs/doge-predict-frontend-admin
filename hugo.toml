@@ -1,10 +1,10 @@
 baseURL = "/"
 languageCode = "en-us"
-title = "Admin App"
+title = "Doge Predict Admin"
 theme = "admin"
 
 [params]
-  description = "A lightweight admin interface"
+  description = "Crypto betting analytics — admin dashboard"
   backendURL = "http://localhost:8080"
 
   # Firebase config — nested to match HUGO_PARAMS_FIREBASE_* env var mapping

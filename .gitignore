@@ -10,6 +10,12 @@ resources/_gen/
 firebase-config.js
 serviceAccountKey.json
 
+# Python (MCP server)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
 # Editor/IDE
 .idea/
 .vscode/

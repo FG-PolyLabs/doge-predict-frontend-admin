@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "doge-predict-bq": {
+      "command": "python",
+      "args": ["mcp/bq_server.py"]
+    }
+  }
+}
