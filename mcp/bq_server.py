@@ -18,13 +18,13 @@ PROJECT = "fg-polylabs"
 DATASET = "doge_predict"
 
 TABLES = {
-    "tracked_tokens": "Crypto tokens being tracked (symbol, name, platform, coingecko_id, active, created/updated timestamps)",
-    "price_snapshots": "Periodic price snapshots for tracked tokens (token, price_usd, market_cap, volume_24h, timestamp)",
-    "betting_markets": "Crypto betting markets from Polymarket, Kalshi, etc. (platform, slug, title, category, outcome_yes_price, outcome_no_price, volume, end_date)",
-    "market_snapshots": "Point-in-time snapshots of betting market odds (market_id, yes_price, no_price, volume, timestamp)",
+    "tracked_markets": "Crypto betting markets being tracked (market_id, slug, title, category=crypto_daily|crypto_weekly, platform, yes/no_token_id, active, end_date)",
+    "market_snapshots": "Time-series price/odds snapshots (market_slug, outcome_tag=yes|no, timestamp, price 0-1, volume, liquidity). Partitioned by date, clustered by market_slug. Dedup key: (market_slug, outcome_tag, timestamp)",
+    "tracked_tokens": "Crypto tokens being tracked (symbol, name, platform, coingecko_id, active)",
+    "price_snapshots": "Token price time-series (token, price_usd, market_cap, volume_24h, timestamp)",
     "strategies": "Defined betting strategies (name, description, type, params JSON, active)",
-    "backtest_runs": "Backtest execution results (strategy_id, start_date, end_date, initial_capital, final_capital, sharpe, max_drawdown, win_rate, ran_at)",
-    "backtest_trades": "Individual trades within a backtest run (run_id, market_id, direction, entry_price, exit_price, pnl, timestamp)",
+    "backtest_runs": "Backtest execution results (strategy_id, start/end_date, initial/final_capital, sharpe, max_drawdown, win_rate)",
+    "backtest_trades": "Individual trades within a backtest run (run_id, market_id, direction, entry/exit_price, pnl, timestamp)",
 }
 
 mcp = FastMCP(
