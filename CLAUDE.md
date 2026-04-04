@@ -64,11 +64,32 @@ Two concerns in one repo:
 | Resource | Value | Details |
 |----------|-------|---------|
 | GCP project | `fg-polylabs` | Shared project for all FG-PolyLabs projects |
-| Cloud Run service | `doge-predict-api`, `us-central1` | REST API |
-| Cloud Run job | `doge-predict-sync`, `us-central1` | Scheduled crypto data sync |
-| GCS bucket | `fg-polylabs-doge-predict-data` | Exported JSON snapshots |
+| Cloud Run service | `doge-predict-api`, `us-central1` | REST API (`https://doge-predict-api-846376753241.us-central1.run.app`) |
+| Cloud Run jobs | `doge-predict-sync`, `doge-predict-export`, `doge-predict-prices` | Hourly market sync, 15-min data export, hourly price fetch |
+| Cloud Scheduler | Hourly (sync, prices), every 15 min (export) | Automated data pipeline |
+| GCS bucket | `fg-polylabs-doge-predict-data` | Public JSON exports |
 | BigQuery dataset | `doge_predict` | Source of truth |
-| Firebase project | `fg-polylabs` | Auth provider (shared) |
+| Firebase project | `collection-showcase-auth` | Auth provider (shared across FG-PolyLabs) |
+
+## BigQuery Tables
+
+| Table | Description |
+|-------|-------------|
+| `tracked_markets` | 7 daily crypto up-or-down markets from polymarket.com/crypto/daily (BTC, ETH, DOGE, SOL, XRP, BNB, HYPE) |
+| `market_snapshots_v2` | **Primary odds table.** One row per market per hour. YES/NO prices + directional buy/sell costs (best bid/ask per side). Partitioned by date, clustered by ticker. Dedup: `(market_slug, measured_at)` |
+| `tracked_tokens` | 7 tokens mapped to CoinGecko IDs |
+| `price_snapshots` | Hourly CoinGecko prices. 90 days backfilled. Partitioned by date, clustered by ticker |
+| `strategies` | Betting strategy definitions (always_yes, momentum, contrarian, spread_filter, etc.) |
+| `backtest_runs` | Backtest execution results (PnL, Sharpe, drawdown, win rate) |
+| `backtest_trades` | Individual trades within backtest runs |
+
+### Key v2 snapshot columns
+- `measured_at` — when the snapshot was recorded
+- `expires_at` — when the market resolves
+- `yes_price` / `no_price` — mid prices (0.0-1.0 probability)
+- `yes_buy` / `yes_sell` — cost to buy YES (best ask) / proceeds selling YES (best bid)
+- `no_buy` / `no_sell` — same for NO side
+- `ticker` — btc, eth, doge, sol, xrp, bnb, hype
 
 ## Key Files (This Repo)
 

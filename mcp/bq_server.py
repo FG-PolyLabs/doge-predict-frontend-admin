@@ -7,6 +7,34 @@ Usage (stdio, for Claude Code):
 Requires:
     pip install mcp google-cloud-bigquery
     gcloud auth application-default login
+
+## Quick Reference
+
+Primary tables for market data:
+  - tracked_markets: 7 daily crypto up-or-down markets (BTC, ETH, DOGE, SOL, XRP, BNB, HYPE)
+  - market_snapshots_v2: hourly odds snapshots with YES/NO prices + orderbook costs
+  - tracked_tokens: the 7 crypto tokens being tracked
+  - price_snapshots: hourly CoinGecko price data (90 days backfilled)
+
+Common queries:
+  -- Today's BTC market odds over time:
+  SELECT measured_at, yes_price, no_price, yes_buy, yes_sell
+  FROM doge_predict.market_snapshots_v2
+  WHERE ticker = 'btc' AND date = CURRENT_DATE()
+  ORDER BY measured_at
+
+  -- Latest odds for all daily markets:
+  SELECT ticker, yes_price, no_price, measured_at, expires_at
+  FROM doge_predict.market_snapshots_v2
+  WHERE category = 'crypto_daily'
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY market_slug ORDER BY measured_at DESC) = 1
+
+  -- Correlate BTC price with market odds:
+  SELECT s.measured_at, s.yes_price, p.price_usd
+  FROM doge_predict.market_snapshots_v2 s
+  JOIN doge_predict.price_snapshots p ON s.ticker = p.ticker
+    AND TIMESTAMP_TRUNC(s.measured_at, HOUR) = TIMESTAMP_TRUNC(p.timestamp, HOUR)
+  WHERE s.ticker = 'btc' AND s.date = CURRENT_DATE()
 """
 
 import json
@@ -18,20 +46,54 @@ PROJECT = "fg-polylabs"
 DATASET = "doge_predict"
 
 TABLES = {
-    "tracked_markets": "Crypto betting markets being tracked (market_id, slug, title, category=crypto_daily|crypto_weekly, platform, yes/no_token_id, active, end_date)",
-    "market_snapshots": "Time-series price/odds snapshots (market_slug, outcome_tag=yes|no, timestamp, price 0-1, volume, liquidity). Partitioned by date, clustered by market_slug. Dedup key: (market_slug, outcome_tag, timestamp)",
-    "tracked_tokens": "Crypto tokens being tracked (symbol, name, platform, coingecko_id, active)",
-    "price_snapshots": "Token price time-series (token, price_usd, market_cap, volume_24h, timestamp)",
-    "strategies": "Defined betting strategies (name, description, type, params JSON, active)",
-    "backtest_runs": "Backtest execution results (strategy_id, start/end_date, initial/final_capital, sharpe, max_drawdown, win_rate)",
-    "backtest_trades": "Individual trades within a backtest run (run_id, market_id, direction, entry/exit_price, pnl, timestamp)",
+    "tracked_markets": (
+        "Markets being tracked from polymarket.com/crypto/daily. "
+        "7 daily up-or-down markets: BTC, ETH, DOGE, SOL, XRP, BNB, HYPE. "
+        "Columns: market_id, slug (e.g. bitcoin-up-or-down-on-april-4-2026), title, "
+        "category (crypto_daily|crypto_weekly), platform, yes/no_token_id, active, end_date"
+    ),
+    "market_snapshots_v2": (
+        "PRIMARY table for market odds data. One row per market per measurement time. "
+        "Hourly snapshots of YES/NO prices + directional orderbook costs. "
+        "Key columns: market_slug, ticker, category, measured_at (when recorded), "
+        "expires_at (when market resolves), yes_price, no_price (mid prices 0-1), "
+        "yes_buy (cost to buy YES = YES best ask), yes_sell (proceeds selling YES = YES best bid), "
+        "no_buy, no_sell (same for NO side), *_depth (bid/ask depth), volume, liquidity. "
+        "Partitioned by date, clustered by ticker+category. "
+        "Dedup key: (market_slug, measured_at)"
+    ),
+    "tracked_tokens": (
+        "7 crypto tokens: btc, eth, doge, sol, xrp, bnb, hype. "
+        "Columns: ticker, coingecko_id, name, active"
+    ),
+    "price_snapshots": (
+        "Hourly CoinGecko price data for all 7 tokens. 90 days backfilled. "
+        "Columns: ticker, coingecko_id, date, timestamp, price_usd, market_cap, volume_24h. "
+        "Partitioned by date, clustered by ticker"
+    ),
+    "strategies": (
+        "Betting strategy definitions. Types: always_yes, always_no, momentum, contrarian, spread_filter. "
+        "Columns: strategy_id, name, strategy_type, params (JSON), tickers, intervals, active"
+    ),
+    "backtest_runs": (
+        "Backtest results. Columns: run_id, strategy_id, strategy_name, start/end_date, "
+        "initial/final_capital, total_pnl, total_return, num_trades, win_rate, sharpe_ratio, max_drawdown"
+    ),
+    "backtest_trades": (
+        "Individual trades in a backtest. Columns: trade_id, run_id, market_slug, ticker, "
+        "direction (yes|no), entry_price, exit_price, pnl, spread_at_entry"
+    ),
+    "market_snapshots": "(LEGACY v1 — use market_snapshots_v2 instead) Old format with separate YES/NO rows",
 }
 
 mcp = FastMCP(
     "doge-predict-bq",
     instructions=(
         "Read-only BigQuery access to the doge_predict dataset in the fg-polylabs GCP project. "
-        "Contains crypto price data, betting market odds, strategies, and backtest results."
+        "Contains crypto betting market odds from Polymarket (daily up-or-down markets), "
+        "token prices from CoinGecko, strategy definitions, and backtest results. "
+        "The primary odds table is market_snapshots_v2 (not market_snapshots). "
+        "7 tokens tracked: BTC, ETH, DOGE, SOL, XRP, BNB, HYPE."
     ),
 )
 client = bigquery.Client(project=PROJECT)
