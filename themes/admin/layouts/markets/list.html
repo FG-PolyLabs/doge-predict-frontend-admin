@@ -92,6 +92,7 @@
   ];
 
   const INTERVALS = [
+    {value: 'crypto_4h', label: '4 Hour', desc: 'Up or down in 4 hours?'},
     {value: 'crypto_daily', label: 'Daily', desc: 'Will it go up today?'},
     {value: 'crypto_weekly', label: 'Weekly', desc: 'Will it go up this week?'},
   ];
@@ -140,9 +141,7 @@
   function renderTokenGrid() {
     const grid = document.getElementById('token-grid');
     grid.innerHTML = TOKENS.map(t => {
-      const tokenNames = {btc:'bitcoin',eth:'ethereum',doge:'dogecoin',sol:'solana',xrp:'xrp',bnb:'bnb',hype:'hype'};
-      const tn = tokenNames[t.ticker] || t.ticker;
-      const count = allMarkets.filter(m => m.slug && m.slug.startsWith(tn + '-')).length;
+      const count = allMarkets.filter(m => marketMatchesTicker(m, t.ticker)).length;
       return `
       <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm h-100 cursor-pointer" onclick="selectToken('${t.ticker}')" style="cursor:pointer">
@@ -168,10 +167,8 @@
   // ── Step 2: Interval grid ──
   function renderIntervalGrid() {
     const grid = document.getElementById('interval-grid');
-    const tokenNames = {btc:'bitcoin',eth:'ethereum',doge:'dogecoin',sol:'solana',xrp:'xrp',bnb:'bnb',hype:'hype'};
-    const tn = tokenNames[selectedToken] || selectedToken;
     grid.innerHTML = INTERVALS.map(iv => {
-      const count = allMarkets.filter(m => m.slug && m.slug.startsWith(tn + '-') && m.category === iv.value).length;
+      const count = allMarkets.filter(m => marketMatchesTicker(m, selectedToken) && m.category === iv.value).length;
       const available = count > 0;
       return `
       <div class="col-6 col-md-4">
@@ -196,10 +193,8 @@
 
   // ── Step 3: Expiration dates ──
   function renderDates() {
-    const tokenNames = {btc:'bitcoin',eth:'ethereum',doge:'dogecoin',sol:'solana',xrp:'xrp',bnb:'bnb',hype:'hype'};
-    const tn = tokenNames[selectedToken] || selectedToken;
     const markets = allMarkets
-      .filter(m => m.slug && m.slug.startsWith(tn + '-') && m.category === selectedInterval)
+      .filter(m => marketMatchesTicker(m, selectedToken) && m.category === selectedInterval)
       .sort((a, b) => (a.end_date || '').localeCompare(b.end_date || ''));
 
     const list = document.getElementById('dates-list');
@@ -317,6 +312,19 @@
     });
 
     goToStep('detail');
+  }
+
+  // Match a market to a ticker — handles both slug patterns:
+  //   daily: "bitcoin-up-or-down-on-..." or "dogecoin-up-or-down-on-..."
+  //   4h:    "btc-updown-4h-..." or "doge-updown-4h-..."
+  const TICKER_SLUG_PREFIXES = {
+    btc: ['bitcoin-', 'btc-'], eth: ['ethereum-', 'eth-'], doge: ['dogecoin-', 'doge-'],
+    sol: ['solana-', 'sol-'], xrp: ['xrp-'], bnb: ['bnb-'], hype: ['hype-'],
+  };
+  function marketMatchesTicker(m, ticker) {
+    if (!m.slug) return false;
+    const prefixes = TICKER_SLUG_PREFIXES[ticker] || [ticker + '-'];
+    return prefixes.some(p => m.slug.startsWith(p));
   }
 
   function escAttr(s) { return s.replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
