@@ -1,0 +1,110 @@
+{{ define "main" }}
+<h2 class="h5 mb-4 fw-semibold">{{ .Title }}</h2>
+
+<div id="auth-guard" class="alert alert-warning d-none">
+  <i class="bi bi-lock me-1"></i>You must be <a href="{{ "" | relURL }}">signed in</a>.
+</div>
+
+<div id="content" class="d-none">
+  <p class="text-muted mb-3">Raw snapshot data across all markets. Use the Markets page to browse by token.</p>
+
+  <div class="row mb-3 g-2">
+    <div class="col-auto">
+      <select class="form-select form-select-sm" id="filter-ticker" onchange="renderTable()">
+        <option value="">All tickers</option>
+        <option value="btc">BTC</option><option value="eth">ETH</option>
+        <option value="doge">DOGE</option><option value="sol">SOL</option>
+        <option value="xrp">XRP</option><option value="bnb">BNB</option>
+        <option value="hype">HYPE</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <select class="form-select form-select-sm" id="filter-outcome" onchange="renderTable()">
+        <option value="">Both</option>
+        <option value="yes">YES only</option>
+        <option value="no">NO only</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <span class="badge bg-light text-dark" id="count-badge"></span>
+    </div>
+  </div>
+
+  <div id="loading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+  </div>
+
+  <div class="card shadow-sm border-0 d-none" id="table-card">
+    <div class="card-body p-0">
+      <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th class="ps-3">Market</th>
+              <th>Side</th>
+              <th>Time (UTC)</th>
+              <th class="text-end">Price</th>
+              <th class="text-end">Bid</th>
+              <th class="text-end">Ask</th>
+              <th class="text-end pe-3">Spread</th>
+            </tr>
+          </thead>
+          <tbody id="snap-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{{ end }}
+
+{{ define "page-scripts" }}
+<script>
+  let allSnaps = [];
+
+  firebase.auth().onAuthStateChanged(async user => {
+    if (!user) { document.getElementById('auth-guard').classList.remove('d-none'); return; }
+    document.getElementById('content').classList.remove('d-none');
+    try {
+      allSnaps = await loadJsonData('market_snapshots.json');
+      allSnaps.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    } catch (e) {
+      showToast('Failed to load snapshots: ' + e.message, 'danger');
+      allSnaps = [];
+    }
+    document.getElementById('loading').classList.add('d-none');
+    renderTable();
+  });
+
+  function renderTable() {
+    const ticker = document.getElementById('filter-ticker').value;
+    const outcome = document.getElementById('filter-outcome').value;
+
+    let filtered = allSnaps;
+    if (ticker) filtered = filtered.filter(s => s.market_slug && s.market_slug.startsWith(ticker + '-'));
+    if (outcome) filtered = filtered.filter(s => s.outcome_tag === outcome);
+
+    const show = filtered.slice(0, 500);
+    document.getElementById('count-badge').textContent = `${show.length} of ${filtered.length} rows`;
+
+    if (!show.length) {
+      document.getElementById('table-card').classList.add('d-none');
+      return;
+    }
+    document.getElementById('table-card').classList.remove('d-none');
+
+    document.getElementById('snap-tbody').innerHTML = show.map(s => {
+      const ts = s.timestamp ? new Date(s.timestamp).toLocaleString('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
+      const sideClass = s.outcome_tag === 'yes' ? 'success' : 'danger';
+      return `<tr>
+        <td class="ps-3 small">${(s.market_slug||'').replace(/-updown-/,' ').slice(0,30)}</td>
+        <td><span class="badge bg-${sideClass}-subtle text-${sideClass}">${s.outcome_tag}</span></td>
+        <td class="small text-muted">${ts}</td>
+        <td class="text-end">${((s.price||0)*100).toFixed(1)}¢</td>
+        <td class="text-end">${s.best_bid != null ? (s.best_bid*100).toFixed(1)+'¢' : '—'}</td>
+        <td class="text-end">${s.best_ask != null ? (s.best_ask*100).toFixed(1)+'¢' : '—'}</td>
+        <td class="text-end pe-3">${s.spread != null ? (s.spread*100).toFixed(1)+'¢' : '—'}</td>
+      </tr>`;
+    }).join('');
+  }
+</script>
+{{ end }}

@@ -1,109 +1,76 @@
 {{ define "main" }}
-<div class="d-flex align-items-center justify-content-between mb-4">
-  <h2 class="h5 mb-0 fw-semibold">{{ .Title }}</h2>
-  <div class="d-flex gap-2">
-    <button class="btn btn-outline-secondary btn-sm" id="btn-discover" onclick="discoverMarkets()">
-      <i class="bi bi-search me-1"></i>Discover
-    </button>
-    <button class="btn btn-outline-secondary btn-sm" id="btn-sync" onclick="syncMarkets()">
-      <i class="bi bi-arrow-repeat me-1"></i>Sync
-    </button>
-  </div>
-</div>
+<h2 class="h5 mb-4 fw-semibold">{{ .Title }}</h2>
 
-<!-- Source selector -->
-<div class="mb-3">
-  <div class="btn-group btn-group-sm" role="group">
-    <input type="radio" class="btn-check" name="source" id="src-github" value="github" checked>
-    <label class="btn btn-outline-secondary" for="src-github"><i class="bi bi-github me-1"></i>GitHub</label>
-    <input type="radio" class="btn-check" name="source" id="src-gcs" value="gcs">
-    <label class="btn btn-outline-secondary" for="src-gcs"><i class="bi bi-cloud me-1"></i>GCS</label>
-    <input type="radio" class="btn-check" name="source" id="src-api" value="api">
-    <label class="btn btn-outline-secondary" for="src-api"><i class="bi bi-hdd-network me-1"></i>API</label>
-  </div>
-  <span class="badge bg-light text-dark ms-2" id="source-badge"></span>
-</div>
-
-<!-- Category filter -->
-<div class="mb-3">
-  <div class="btn-group btn-group-sm" role="group">
-    <input type="radio" class="btn-check" name="cat" id="cat-all" value="all" checked>
-    <label class="btn btn-outline-primary" for="cat-all">All</label>
-    <input type="radio" class="btn-check" name="cat" id="cat-daily" value="crypto_daily">
-    <label class="btn btn-outline-primary" for="cat-daily">Daily</label>
-    <input type="radio" class="btn-check" name="cat" id="cat-weekly" value="crypto_weekly">
-    <label class="btn btn-outline-primary" for="cat-weekly">Weekly</label>
-  </div>
-</div>
-
-<!-- Auth guard -->
 <div id="auth-guard" class="alert alert-warning d-none">
-  <i class="bi bi-lock me-1"></i>You must be <a href="{{ "" | relURL }}">signed in</a> to manage markets.
+  <i class="bi bi-lock me-1"></i>You must be <a href="{{ "" | relURL }}">signed in</a>.
 </div>
 
-<!-- Loading -->
-<div id="loading" class="text-center py-5">
+<div id="loading" class="text-center py-5 d-none">
   <div class="spinner-border text-primary" role="status"></div>
 </div>
 
-<!-- Empty state -->
-<div id="empty-state" class="text-center py-5 d-none">
-  <i class="bi bi-shop fs-1 text-muted"></i>
-  <p class="text-muted mt-2">No markets tracked yet. Click <strong>Discover</strong> to find Polymarket crypto markets.</p>
+<!-- Step 1: Pick a token -->
+<div id="step-token" class="d-none">
+  <p class="text-muted mb-3">Select a token to browse its betting markets.</p>
+  <div class="row g-3" id="token-grid"></div>
 </div>
 
-<!-- Markets table -->
-<div class="card shadow-sm border-0 d-none" id="markets-card">
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-          <tr>
-            <th class="ps-3">Market</th>
-            <th>Category</th>
-            <th class="text-center">YES</th>
-            <th class="text-center">NO</th>
-            <th class="text-center">Spread</th>
-            <th class="text-end pe-3">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="markets-tbody"></tbody>
-      </table>
+<!-- Step 2: Pick an interval -->
+<div id="step-interval" class="d-none">
+  <nav aria-label="breadcrumb"><ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="#" onclick="goToStep('token')">Tokens</a></li>
+    <li class="breadcrumb-item active" id="bc-token"></li>
+  </ol></nav>
+  <p class="text-muted mb-3">Choose a market interval.</p>
+  <div class="row g-3" id="interval-grid"></div>
+</div>
+
+<!-- Step 3: Pick expiration dates -->
+<div id="step-dates" class="d-none">
+  <nav aria-label="breadcrumb"><ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="#" onclick="goToStep('token')">Tokens</a></li>
+    <li class="breadcrumb-item"><a href="#" onclick="goToStep('interval')" id="bc-token2"></a></li>
+    <li class="breadcrumb-item active" id="bc-interval"></li>
+  </ol></nav>
+  <p class="text-muted mb-3">Select a market by expiration date.</p>
+  <div id="dates-list"></div>
+</div>
+
+<!-- Step 4: Market detail with odds chart -->
+<div id="step-detail" class="d-none">
+  <nav aria-label="breadcrumb"><ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="#" onclick="goToStep('token')">Tokens</a></li>
+    <li class="breadcrumb-item"><a href="#" onclick="goToStep('interval')" id="bc-token3"></a></li>
+    <li class="breadcrumb-item"><a href="#" onclick="goToStep('dates')" id="bc-interval2"></a></li>
+    <li class="breadcrumb-item active" id="bc-date"></li>
+  </ol></nav>
+
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <h5 class="card-title fw-semibold" id="detail-title"></h5>
+      <div class="row mt-3" id="detail-stats"></div>
     </div>
   </div>
-</div>
 
-<!-- Price history modal -->
-<div class="modal fade" id="chartModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header border-0">
-        <h5 class="modal-title" id="chart-title">Price History</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <div class="btn-group btn-group-sm" role="group">
-            <button class="btn btn-outline-secondary active" onclick="setChartRange('24h', this)">24h</button>
-            <button class="btn btn-outline-secondary" onclick="setChartRange('48h', this)">48h</button>
-            <button class="btn btn-outline-secondary" onclick="setChartRange('7d', this)">7d</button>
-          </div>
-        </div>
-        <canvas id="priceChart" height="300"></canvas>
-        <div class="row mt-3" id="chart-stats">
-          <div class="col-4 text-center">
-            <div class="text-muted small">Best Bid</div>
-            <div class="fw-medium" id="stat-bid">—</div>
-          </div>
-          <div class="col-4 text-center">
-            <div class="text-muted small">Best Ask</div>
-            <div class="fw-medium" id="stat-ask">—</div>
-          </div>
-          <div class="col-4 text-center">
-            <div class="text-muted small">Spread</div>
-            <div class="fw-medium" id="stat-spread">—</div>
-          </div>
-        </div>
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+      <span class="fw-medium">Odds History</span>
+      <span class="text-muted small" id="detail-points"></span>
+    </div>
+    <div class="card-body">
+      <canvas id="oddsChart" height="300"></canvas>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-white fw-medium">Orderbook (Latest)</div>
+    <div class="card-body">
+      <div class="row" id="orderbook-stats">
+        <div class="col text-center"><div class="text-muted small">Best Bid</div><div class="fw-medium" id="ob-bid">—</div></div>
+        <div class="col text-center"><div class="text-muted small">Best Ask</div><div class="fw-medium" id="ob-ask">—</div></div>
+        <div class="col text-center"><div class="text-muted small">Spread</div><div class="fw-medium" id="ob-spread">—</div></div>
+        <div class="col text-center"><div class="text-muted small">Bid Depth</div><div class="fw-medium" id="ob-bid-depth">—</div></div>
+        <div class="col text-center"><div class="text-muted small">Ask Depth</div><div class="fw-medium" id="ob-ask-depth">—</div></div>
       </div>
     </div>
   </div>
@@ -111,261 +78,247 @@
 {{ end }}
 
 {{ define "page-scripts" }}
-<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-
 <script>
-  const MARKETS_FILE = 'tracked_markets.json';
-  const SNAPSHOTS_FILE = 'market_snapshots.json';
+  const TOKENS = [
+    {ticker: 'btc', name: 'Bitcoin', icon: 'currency-bitcoin', color: 'warning'},
+    {ticker: 'eth', name: 'Ethereum', icon: 'diamond', color: 'primary'},
+    {ticker: 'doge', name: 'Dogecoin', icon: 'coin', color: 'warning'},
+    {ticker: 'sol', name: 'Solana', icon: 'lightning', color: 'info'},
+    {ticker: 'xrp', name: 'XRP', icon: 'circle', color: 'dark'},
+    {ticker: 'bnb', name: 'BNB', icon: 'hexagon', color: 'warning'},
+    {ticker: 'hype', name: 'Hyperliquid', icon: 'graph-up', color: 'success'},
+  ];
 
-  const chartModal = new bootstrap.Modal(document.getElementById('chartModal'));
-  let priceChart = null;
+  const INTERVALS = [
+    {value: '5m', label: '5 Minute', desc: 'Ultra short-term'},
+    {value: '15m', label: '15 Minute', desc: 'Short-term'},
+    {value: '4h', label: '4 Hour', desc: 'Medium-term'},
+    {value: 'daily', label: 'Daily', desc: 'Will it go up today?'},
+    {value: 'weekly', label: 'Weekly', desc: 'Will it go up this week?'},
+  ];
+
   let allMarkets = [];
   let allSnapshots = [];
-  let currentSource = 'github';
-  let currentCategory = 'all';
-  let currentChartMarket = null;
-
-  document.querySelectorAll('input[name="source"]').forEach(r => {
-    r.addEventListener('change', e => { currentSource = e.target.value; loadData(); });
-  });
-  document.querySelectorAll('input[name="cat"]').forEach(r => {
-    r.addEventListener('change', e => { currentCategory = e.target.value; renderMarkets(); });
-  });
+  let selectedToken = null;
+  let selectedInterval = null;
+  let oddsChart = null;
 
   firebase.auth().onAuthStateChanged(async user => {
     if (!user) {
-      document.getElementById('loading').classList.add('d-none');
       document.getElementById('auth-guard').classList.remove('d-none');
       return;
     }
-    document.getElementById('btn-resources')?.classList.remove('d-none');
-    await loadData();
+    document.getElementById('loading').classList.remove('d-none');
+    try {
+      allMarkets = await loadJsonData('tracked_markets.json');
+      allSnapshots = await loadJsonData('market_snapshots.json');
+    } catch (e) {
+      // Try API fallback
+      try {
+        allMarkets = await api('GET', '/markets');
+        allSnapshots = [];
+      } catch (e2) {
+        allMarkets = [];
+        allSnapshots = [];
+        showToast('Failed to load markets: ' + e2.message, 'danger');
+      }
+    }
+    document.getElementById('loading').classList.add('d-none');
+    goToStep('token');
   });
 
-  async function loadData() {
-    const badge = document.getElementById('source-badge');
-    document.getElementById('loading').classList.remove('d-none');
-    document.getElementById('markets-card').classList.add('d-none');
-    document.getElementById('empty-state').classList.add('d-none');
+  function goToStep(step) {
+    ['step-token','step-interval','step-dates','step-detail'].forEach(id =>
+      document.getElementById(id).classList.add('d-none'));
+    document.getElementById(`step-${step}`).classList.remove('d-none');
 
-    try {
-      if (currentSource === 'api') {
-        allMarkets = await api('GET', '/markets');
-        badge.textContent = 'Live API';
-      } else {
-        allMarkets = await loadJsonData(MARKETS_FILE);
-        badge.textContent = currentSource === 'gcs' ? 'GCS (read-only)' : 'GitHub (read-only)';
-      }
-
-      // Try loading snapshots for orderbook data
-      try {
-        if (currentSource === 'api') {
-          allSnapshots = await api('GET', '/markets/snapshots/latest');
-        } else {
-          allSnapshots = await loadJsonData(SNAPSHOTS_FILE);
-        }
-      } catch (_) { allSnapshots = []; }
-
-    } catch (e) {
-      allMarkets = [];
-      showToast('Failed to load markets: ' + e.message, 'danger');
-    }
-
-    document.getElementById('loading').classList.add('d-none');
-    renderMarkets();
+    if (step === 'token') renderTokenGrid();
+    if (step === 'interval') renderIntervalGrid();
+    if (step === 'dates') renderDates();
   }
 
-  function renderMarkets() {
-    let markets = allMarkets;
-    if (currentCategory !== 'all') {
-      markets = markets.filter(m => m.category === currentCategory);
-    }
-
-    if (!markets || markets.length === 0) {
-      document.getElementById('empty-state').classList.remove('d-none');
-      document.getElementById('markets-card').classList.add('d-none');
-      return;
-    }
-
-    document.getElementById('empty-state').classList.add('d-none');
-    document.getElementById('markets-card').classList.remove('d-none');
-
-    const tbody = document.getElementById('markets-tbody');
-    tbody.innerHTML = markets.map(m => {
-      const yesPrice = m.outcome_yes_price || 0;
-      const noPrice = m.outcome_no_price || 0;
-
-      // Find latest snapshot with orderbook data for this market
-      const latestSnap = allSnapshots
-        .filter(s => s.market_slug === m.slug && s.outcome_tag === 'yes' && s.best_bid)
-        .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))[0];
-
-      const spread = latestSnap ? latestSnap.spread : null;
-      const spreadDisplay = spread != null
-        ? `<span class="${spread > 0.03 ? 'text-danger' : 'text-success'}">${(spread * 100).toFixed(1)}¢</span>`
-        : '<span class="text-muted">—</span>';
-
-      const catBadge = m.category === 'crypto_daily'
-        ? '<span class="badge bg-primary-subtle text-primary">Daily</span>'
-        : '<span class="badge bg-info-subtle text-info">Weekly</span>';
-
+  // ── Step 1: Token grid ──
+  function renderTokenGrid() {
+    const grid = document.getElementById('token-grid');
+    grid.innerHTML = TOKENS.map(t => {
+      const count = allMarkets.filter(m => m.slug && m.slug.startsWith(t.ticker + '-updown-')).length;
       return `
-        <tr>
-          <td class="ps-3">
-            <div class="fw-medium">${escHtml(m.title || m.slug)}</div>
-            <div class="text-muted small">${escHtml(m.slug)}</div>
-          </td>
-          <td>${catBadge}</td>
-          <td class="text-center">
-            <span class="badge bg-success-subtle text-success fs-6">${(yesPrice * 100).toFixed(1)}¢</span>
-          </td>
-          <td class="text-center">
-            <span class="badge bg-danger-subtle text-danger fs-6">${(noPrice * 100).toFixed(1)}¢</span>
-          </td>
-          <td class="text-center">${spreadDisplay}</td>
-          <td class="text-end pe-3">
-            <button class="btn btn-sm btn-outline-primary" onclick="showChart('${escAttr(m.slug)}', '${escAttr(m.title || m.slug)}')">
-              <i class="bi bi-graph-up"></i>
-            </button>
-          </td>
-        </tr>
-      `;
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm h-100 cursor-pointer" onclick="selectToken('${t.ticker}')" style="cursor:pointer">
+          <div class="card-body text-center p-3">
+            <i class="bi bi-${t.icon} fs-2 text-${t.color} d-block mb-2"></i>
+            <h6 class="mb-0">${t.name}</h6>
+            <span class="text-muted small">${t.ticker.toUpperCase()} &middot; ${count} markets</span>
+          </div>
+        </div>
+      </div>`;
     }).join('');
   }
 
-  async function showChart(slug, title) {
-    document.getElementById('chart-title').textContent = title;
-    chartModal.show();
-
-    // Find snapshot data for this market
-    currentChartMarket = slug;
-    await renderChart('24h');
+  function selectToken(ticker) {
+    selectedToken = ticker;
+    const t = TOKENS.find(t => t.ticker === ticker);
+    document.getElementById('bc-token').textContent = t.name;
+    document.getElementById('bc-token2').textContent = t.name;
+    document.getElementById('bc-token3').textContent = t.name;
+    goToStep('interval');
   }
 
-  function setChartRange(range, btn) {
-    document.querySelectorAll('#chartModal .btn-group .btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    renderChart(range);
+  // ── Step 2: Interval grid ──
+  function renderIntervalGrid() {
+    const grid = document.getElementById('interval-grid');
+    grid.innerHTML = INTERVALS.map(iv => {
+      const prefix = `${selectedToken}-updown-${iv.value}-`;
+      const count = allMarkets.filter(m => m.slug && m.slug.startsWith(prefix)).length;
+      const available = count > 0;
+      return `
+      <div class="col-6 col-md-4">
+        <div class="card border-0 shadow-sm h-100 ${available ? '' : 'opacity-50'}" onclick="${available ? `selectInterval('${iv.value}')` : ''}" style="cursor:${available ? 'pointer' : 'default'}">
+          <div class="card-body text-center p-3">
+            <h5 class="mb-1">${iv.label}</h5>
+            <p class="text-muted small mb-1">${iv.desc}</p>
+            <span class="badge ${available ? 'bg-primary' : 'bg-secondary'}">${count} markets</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
   }
 
-  async function renderChart(range) {
-    const slug = currentChartMarket;
-    const hours = range === '7d' ? 168 : range === '48h' ? 48 : 24;
-    const cutoff = new Date(Date.now() - hours * 3600000).toISOString();
+  function selectInterval(interval) {
+    selectedInterval = interval;
+    const iv = INTERVALS.find(i => i.value === interval);
+    document.getElementById('bc-interval').textContent = iv.label;
+    document.getElementById('bc-interval2').textContent = iv.label;
+    goToStep('dates');
+  }
 
-    // Filter snapshots for this market
-    const snaps = allSnapshots
-      .filter(s => s.market_slug === slug && s.timestamp >= cutoff)
-      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  // ── Step 3: Expiration dates ──
+  function renderDates() {
+    const prefix = `${selectedToken}-updown-${selectedInterval}-`;
+    const markets = allMarkets
+      .filter(m => m.slug && m.slug.startsWith(prefix))
+      .sort((a, b) => (a.end_date || '').localeCompare(b.end_date || ''));
 
-    const yesData = snaps.filter(s => s.outcome_tag === 'yes').map(s => ({ x: new Date(s.timestamp), y: s.price }));
-    const noData = snaps.filter(s => s.outcome_tag === 'no').map(s => ({ x: new Date(s.timestamp), y: s.price }));
-
-    // Update stats from latest snapshot with orderbook data
-    const latestWithBook = snaps
-      .filter(s => s.outcome_tag === 'yes' && s.best_bid)
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
-
-    if (latestWithBook) {
-      document.getElementById('stat-bid').textContent = (latestWithBook.best_bid * 100).toFixed(1) + '¢';
-      document.getElementById('stat-ask').textContent = (latestWithBook.best_ask * 100).toFixed(1) + '¢';
-      document.getElementById('stat-spread').textContent = (latestWithBook.spread * 100).toFixed(1) + '¢';
-    } else {
-      document.getElementById('stat-bid').textContent = '—';
-      document.getElementById('stat-ask').textContent = '—';
-      document.getElementById('stat-spread').textContent = '—';
+    const list = document.getElementById('dates-list');
+    if (!markets.length) {
+      list.innerHTML = '<div class="text-center py-5 text-muted"><i class="bi bi-calendar-x fs-1 d-block mb-2"></i>No markets found for this combination.</div>';
+      return;
     }
 
-    // Render chart
-    const ctx = document.getElementById('priceChart').getContext('2d');
-    if (priceChart) priceChart.destroy();
+    list.innerHTML = markets.map(m => {
+      const endDate = m.end_date ? new Date(m.end_date) : null;
+      const dateStr = endDate ? endDate.toLocaleString('en-US', {month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short'}) : m.end_date || '?';
+      const yesPrice = m.outcome_yes_price || m.latest_yes_price || 0;
+      const noPrice = m.outcome_no_price || m.latest_no_price || 0;
+      const isPast = endDate && endDate < new Date();
 
-    priceChart = new Chart(ctx, {
+      return `
+      <div class="card border-0 shadow-sm mb-2" onclick="selectMarket('${escAttr(m.slug)}')" style="cursor:pointer">
+        <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center">
+          <div>
+            <span class="fw-medium">${dateStr}</span>
+            ${isPast ? '<span class="badge bg-secondary-subtle text-secondary ms-2">Ended</span>' : '<span class="badge bg-success-subtle text-success ms-2">Active</span>'}
+          </div>
+          <div class="d-flex gap-3">
+            <span class="badge bg-success-subtle text-success fs-6">YES ${(yesPrice*100).toFixed(0)}¢</span>
+            <span class="badge bg-danger-subtle text-danger fs-6">NO ${(noPrice*100).toFixed(0)}¢</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Step 4: Market detail ──
+  function selectMarket(slug) {
+    const market = allMarkets.find(m => m.slug === slug);
+    if (!market) return;
+
+    const endDate = market.end_date ? new Date(market.end_date) : null;
+    const dateStr = endDate ? endDate.toLocaleString('en-US', {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short'}) : '';
+    document.getElementById('bc-date').textContent = dateStr;
+    document.getElementById('detail-title').textContent = market.title || slug;
+
+    // Get snapshots for this market
+    const snaps = allSnapshots
+      .filter(s => s.market_slug === slug)
+      .sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+
+    const yesSnaps = snaps.filter(s => s.outcome_tag === 'yes');
+    const noSnaps = snaps.filter(s => s.outcome_tag === 'no');
+
+    // Stats
+    const latestYes = yesSnaps[yesSnaps.length - 1] || {};
+    const latestNo = noSnaps[noSnaps.length - 1] || {};
+
+    document.getElementById('detail-stats').innerHTML = `
+      <div class="col-3 text-center">
+        <div class="text-muted small">YES Price</div>
+        <div class="fw-bold text-success fs-5">${((latestYes.price||0)*100).toFixed(1)}¢</div>
+      </div>
+      <div class="col-3 text-center">
+        <div class="text-muted small">NO Price</div>
+        <div class="fw-bold text-danger fs-5">${((latestNo.price||0)*100).toFixed(1)}¢</div>
+      </div>
+      <div class="col-3 text-center">
+        <div class="text-muted small">Snapshots</div>
+        <div class="fw-bold">${snaps.length}</div>
+      </div>
+      <div class="col-3 text-center">
+        <div class="text-muted small">Expires</div>
+        <div class="fw-medium small">${dateStr}</div>
+      </div>
+    `;
+
+    document.getElementById('detail-points').textContent = `${snaps.length} data points`;
+
+    // Orderbook (from latest snapshot with book data)
+    const withBook = yesSnaps.filter(s => s.best_bid != null);
+    const latestBook = withBook[withBook.length - 1];
+    if (latestBook) {
+      document.getElementById('ob-bid').textContent = (latestBook.best_bid * 100).toFixed(1) + '¢';
+      document.getElementById('ob-ask').textContent = (latestBook.best_ask * 100).toFixed(1) + '¢';
+      document.getElementById('ob-spread').textContent = (latestBook.spread * 100).toFixed(1) + '¢';
+      document.getElementById('ob-bid-depth').textContent = '$' + latestBook.bid_depth.toLocaleString(undefined, {maximumFractionDigits:0});
+      document.getElementById('ob-ask-depth').textContent = '$' + latestBook.ask_depth.toLocaleString(undefined, {maximumFractionDigits:0});
+    } else {
+      ['ob-bid','ob-ask','ob-spread','ob-bid-depth','ob-ask-depth'].forEach(id =>
+        document.getElementById(id).textContent = '—');
+    }
+
+    // Chart
+    const yesData = yesSnaps.map(s => ({x: new Date(s.timestamp), y: s.price}));
+    const noData = noSnaps.map(s => ({x: new Date(s.timestamp), y: s.price}));
+
+    const ctx = document.getElementById('oddsChart').getContext('2d');
+    if (oddsChart) oddsChart.destroy();
+
+    oddsChart = new Chart(ctx, {
       type: 'line',
       data: {
         datasets: [
-          {
-            label: 'YES',
-            data: yesData,
-            borderColor: '#198754',
-            backgroundColor: 'rgba(25,135,84,0.1)',
-            fill: true,
-            tension: 0.3,
-            pointRadius: 1,
-            borderWidth: 2,
-          },
-          {
-            label: 'NO',
-            data: noData,
-            borderColor: '#dc3545',
-            backgroundColor: 'rgba(220,53,69,0.1)',
-            fill: true,
-            tension: 0.3,
-            pointRadius: 1,
-            borderWidth: 2,
-          },
+          { label: 'YES', data: yesData, borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.1)', fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2 },
+          { label: 'NO', data: noData, borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.1)', fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2 },
         ],
       },
       options: {
         responsive: true,
         interaction: { intersect: false, mode: 'index' },
         scales: {
-          x: {
-            type: 'time',
-            time: { tooltipFormat: 'MMM d, HH:mm' },
-            title: { display: false },
-          },
-          y: {
-            min: 0, max: 1,
-            title: { display: true, text: 'Price (probability)' },
-            ticks: { callback: v => (v * 100).toFixed(0) + '¢' },
-          },
+          x: { type: 'time', time: { tooltipFormat: 'MMM d, HH:mm' } },
+          y: { min: 0, max: 1, title: { display: true, text: 'Price (probability)' },
+               ticks: { callback: v => (v * 100).toFixed(0) + '¢' } },
         },
         plugins: {
-          tooltip: {
-            callbacks: {
-              label: ctx => `${ctx.dataset.label}: ${(ctx.parsed.y * 100).toFixed(1)}¢`,
-            },
-          },
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${(ctx.parsed.y * 100).toFixed(1)}¢` } },
         },
       },
     });
+
+    goToStep('detail');
   }
 
-  async function discoverMarkets() {
-    const btn = document.getElementById('btn-discover');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-search spin me-1"></i>Discovering...';
-    try {
-      await api('POST', '/markets/discover');
-      showToast('Market discovery triggered.', 'success');
-      currentSource = 'api';
-      document.getElementById('src-api').checked = true;
-      await loadData();
-    } catch (e) { showToast('Discovery failed: ' + e.message, 'danger'); }
-    finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-search me-1"></i>Discover'; }
-  }
-
-  async function syncMarkets() {
-    const btn = document.getElementById('btn-sync');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-arrow-repeat spin me-1"></i>Syncing...';
-    try {
-      await api('POST', '/sync/markets');
-      showToast('Markets synced.', 'success');
-    } catch (e) { showToast('Sync failed: ' + e.message, 'danger'); }
-    finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Sync'; }
-  }
-
-  function escHtml(str) {
-    const d = document.createElement('div');
-    d.appendChild(document.createTextNode(str));
-    return d.innerHTML;
-  }
-  function escAttr(str) {
-    return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-  }
+  function escAttr(s) { return s.replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 </script>
 {{ end }}
