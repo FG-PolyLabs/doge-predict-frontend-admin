@@ -6,7 +6,7 @@
 </div>
 
 <div id="content" class="d-none">
-  <p class="text-muted mb-3">Raw snapshot data across all markets. Use the Markets page to browse by token.</p>
+  <p class="text-muted mb-3">Raw snapshot data — one row per market per measurement time.</p>
 
   <div class="row mb-3 g-2">
     <div class="col-auto">
@@ -16,13 +16,6 @@
         <option value="doge">DOGE</option><option value="sol">SOL</option>
         <option value="xrp">XRP</option><option value="bnb">BNB</option>
         <option value="hype">HYPE</option>
-      </select>
-    </div>
-    <div class="col-auto">
-      <select class="form-select form-select-sm" id="filter-outcome" onchange="renderTable()">
-        <option value="">Both</option>
-        <option value="yes">YES only</option>
-        <option value="no">NO only</option>
       </select>
     </div>
     <div class="col-auto">
@@ -41,12 +34,14 @@
           <thead class="table-light sticky-top">
             <tr>
               <th class="ps-3">Market</th>
-              <th>Side</th>
-              <th>Time (UTC)</th>
-              <th class="text-end">Price</th>
-              <th class="text-end">Bid</th>
-              <th class="text-end">Ask</th>
-              <th class="text-end pe-3">Spread</th>
+              <th>Measured</th>
+              <th>Expires</th>
+              <th class="text-end">YES</th>
+              <th class="text-end">NO</th>
+              <th class="text-end">YES Buy</th>
+              <th class="text-end">YES Sell</th>
+              <th class="text-end">NO Buy</th>
+              <th class="text-end pe-3">NO Sell</th>
             </tr>
           </thead>
           <tbody id="snap-tbody"></tbody>
@@ -66,7 +61,7 @@
     document.getElementById('content').classList.remove('d-none');
     try {
       allSnaps = await loadJsonData('market_snapshots.json');
-      allSnaps.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+      allSnaps.sort((a, b) => (b.measured_at || '').localeCompare(a.measured_at || ''));
     } catch (e) {
       showToast('Failed to load snapshots: ' + e.message, 'danger');
       allSnaps = [];
@@ -77,11 +72,8 @@
 
   function renderTable() {
     const ticker = document.getElementById('filter-ticker').value;
-    const outcome = document.getElementById('filter-outcome').value;
-
     let filtered = allSnaps;
-    if (ticker) filtered = filtered.filter(s => s.market_slug && s.market_slug.startsWith(ticker + '-'));
-    if (outcome) filtered = filtered.filter(s => s.outcome_tag === outcome);
+    if (ticker) filtered = filtered.filter(s => s.ticker === ticker);
 
     const show = filtered.slice(0, 500);
     document.getElementById('count-badge').textContent = `${show.length} of ${filtered.length} rows`;
@@ -92,19 +84,20 @@
     }
     document.getElementById('table-card').classList.remove('d-none');
 
-    document.getElementById('snap-tbody').innerHTML = show.map(s => {
-      const ts = s.timestamp ? new Date(s.timestamp).toLocaleString('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
-      const sideClass = s.outcome_tag === 'yes' ? 'success' : 'danger';
-      return `<tr>
-        <td class="ps-3 small">${(s.market_slug||'').replace(/-updown-/,' ').slice(0,30)}</td>
-        <td><span class="badge bg-${sideClass}-subtle text-${sideClass}">${s.outcome_tag}</span></td>
-        <td class="small text-muted">${ts}</td>
-        <td class="text-end">${((s.price||0)*100).toFixed(1)}¢</td>
-        <td class="text-end">${s.best_bid != null ? (s.best_bid*100).toFixed(1)+'¢' : '—'}</td>
-        <td class="text-end">${s.best_ask != null ? (s.best_ask*100).toFixed(1)+'¢' : '—'}</td>
-        <td class="text-end pe-3">${s.spread != null ? (s.spread*100).toFixed(1)+'¢' : '—'}</td>
-      </tr>`;
-    }).join('');
+    const fmt = v => v != null ? (v * 100).toFixed(1) + 'c' : '-';
+    const fmtTime = ts => ts ? new Date(ts).toLocaleString('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
+
+    document.getElementById('snap-tbody').innerHTML = show.map(s => `<tr>
+      <td class="ps-3 small">${(s.ticker||'').toUpperCase()} ${(s.category||'').replace('crypto_','')}</td>
+      <td class="small text-muted">${fmtTime(s.measured_at)}</td>
+      <td class="small text-muted">${fmtTime(s.expires_at)}</td>
+      <td class="text-end text-success">${fmt(s.yes_price)}</td>
+      <td class="text-end text-danger">${fmt(s.no_price)}</td>
+      <td class="text-end">${fmt(s.yes_buy)}</td>
+      <td class="text-end">${fmt(s.yes_sell)}</td>
+      <td class="text-end">${fmt(s.no_buy)}</td>
+      <td class="text-end pe-3">${fmt(s.no_sell)}</td>
+    </tr>`).join('');
   }
 </script>
 {{ end }}
