@@ -83,7 +83,21 @@ TABLES = {
         "Individual trades in a backtest. Columns: trade_id, run_id, market_slug, ticker, "
         "direction (yes|no), entry_price, exit_price, pnl, spread_at_entry"
     ),
-    "market_snapshots": "(LEGACY v1 — use market_snapshots_v2 instead) Old format with separate YES/NO rows",
+    "market_resolutions": (
+        "Ground-truth resolution outcomes for resolved markets. "
+        "Columns: market_slug, ticker, category, expires_at, resolved_yes (bool), "
+        "final_yes_price, final_no_price, volume"
+    ),
+    "v_resolution_stats": (
+        "VIEW: Resolution stats by ticker + category. "
+        "Columns: ticker, category, total_markets, yes_wins, no_wins, yes_pct, no_pct, earliest, latest. "
+        "Example: SELECT * FROM doge_predict.v_resolution_stats ORDER BY category, ticker"
+    ),
+    "v_resolution_totals": (
+        "VIEW: Resolution totals by category (+ ALL row). "
+        "Columns: category, total_markets, yes_wins, no_wins, yes_pct"
+    ),
+    "market_snapshots": "(LEGACY v1 — use market_snapshots_v2 instead)",
 }
 
 mcp = FastMCP(

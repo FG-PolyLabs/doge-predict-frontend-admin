@@ -1,0 +1,190 @@
+{{ define "main" }}
+<h2 class="h5 mb-4 fw-semibold">{{ .Title }}</h2>
+
+<div id="auth-guard" class="alert alert-warning d-none">
+  <i class="bi bi-lock me-1"></i>You must be <a href="{{ "" | relURL }}">signed in</a>.
+</div>
+
+<div id="loading" class="text-center py-5">
+  <div class="spinner-border text-primary" role="status"></div>
+</div>
+
+<div id="content" class="d-none">
+  <!-- Totals -->
+  <div class="row g-3 mb-4" id="totals-row"></div>
+
+  <!-- Resolution stats by category -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white fw-medium">Resolution Rates by Category</div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">Category</th>
+            <th class="text-end">Total</th>
+            <th class="text-end">YES Wins</th>
+            <th class="text-end">NO Wins</th>
+            <th class="text-end pe-3">YES %</th>
+          </tr>
+        </thead>
+        <tbody id="totals-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 4h markets table -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white fw-medium">4-Hour Markets by Ticker</div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">Ticker</th>
+            <th class="text-end">Total</th>
+            <th class="text-end">YES</th>
+            <th class="text-end">NO</th>
+            <th class="text-end">YES %</th>
+            <th class="text-end pe-3">Date Range</th>
+          </tr>
+        </thead>
+        <tbody id="fourh-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Daily markets table -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white fw-medium">Daily Markets by Ticker</div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">Ticker</th>
+            <th class="text-end">Total</th>
+            <th class="text-end">YES</th>
+            <th class="text-end">NO</th>
+            <th class="text-end">YES %</th>
+            <th class="text-end pe-3">Date Range</th>
+          </tr>
+        </thead>
+        <tbody id="daily-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Chart: YES% by ticker -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white fw-medium">YES Win Rate by Ticker</div>
+    <div class="card-body">
+      <canvas id="yesPctChart" height="250"></canvas>
+    </div>
+  </div>
+</div>
+{{ end }}
+
+{{ define "page-scripts" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+  firebase.auth().onAuthStateChanged(async user => {
+    if (!user) { document.getElementById('loading').classList.add('d-none'); document.getElementById('auth-guard').classList.remove('d-none'); return; }
+    await loadDashboard();
+  });
+
+  async function loadDashboard() {
+    try {
+      // Load both views via API (or we can query BQ directly — let's use the markets data)
+      const [stats, totals] = await Promise.all([
+        api('GET', '/dashboard/resolution-stats'),
+        api('GET', '/dashboard/resolution-totals'),
+      ]);
+
+      document.getElementById('loading').classList.add('d-none');
+      document.getElementById('content').classList.remove('d-none');
+
+      // Totals cards
+      const allRow = totals.find(t => t.category === 'ALL') || {};
+      document.getElementById('totals-row').innerHTML = `
+        <div class="col-3"><div class="card border-0 shadow-sm"><div class="card-body text-center">
+          <div class="text-muted small">Total Resolved</div>
+          <div class="fw-bold fs-4">${allRow.total_markets || 0}</div>
+        </div></div></div>
+        <div class="col-3"><div class="card border-0 shadow-sm"><div class="card-body text-center">
+          <div class="text-muted small">YES Wins</div>
+          <div class="fw-bold fs-4 text-success">${allRow.yes_wins || 0}</div>
+        </div></div></div>
+        <div class="col-3"><div class="card border-0 shadow-sm"><div class="card-body text-center">
+          <div class="text-muted small">NO Wins</div>
+          <div class="fw-bold fs-4 text-danger">${allRow.no_wins || 0}</div>
+        </div></div></div>
+        <div class="col-3"><div class="card border-0 shadow-sm"><div class="card-body text-center">
+          <div class="text-muted small">Overall YES %</div>
+          <div class="fw-bold fs-4">${allRow.yes_pct || 0}%</div>
+        </div></div></div>
+      `;
+
+      // Category totals table
+      document.getElementById('totals-tbody').innerHTML = totals.map(t => `
+        <tr>
+          <td class="ps-3 fw-medium">${t.category}</td>
+          <td class="text-end">${t.total_markets}</td>
+          <td class="text-end text-success">${t.yes_wins}</td>
+          <td class="text-end text-danger">${t.no_wins}</td>
+          <td class="text-end pe-3 fw-medium">${t.yes_pct}%</td>
+        </tr>
+      `).join('');
+
+      // Split stats by category
+      const fourh = stats.filter(s => s.category === 'crypto_4h');
+      const daily = stats.filter(s => s.category === 'crypto_daily');
+
+      const renderRows = (rows) => rows.map(s => {
+        const earliest = s.earliest ? new Date(s.earliest).toLocaleDateString('en-US', {month:'short',day:'numeric'}) : '';
+        const latest = s.latest ? new Date(s.latest).toLocaleDateString('en-US', {month:'short',day:'numeric'}) : '';
+        const pctColor = s.yes_pct > 52 ? 'text-success' : (s.yes_pct < 48 ? 'text-danger' : '');
+        return `<tr>
+          <td class="ps-3 fw-medium">${s.ticker.toUpperCase()}</td>
+          <td class="text-end">${s.total_markets}</td>
+          <td class="text-end text-success">${s.yes_wins}</td>
+          <td class="text-end text-danger">${s.no_wins}</td>
+          <td class="text-end fw-medium ${pctColor}">${s.yes_pct}%</td>
+          <td class="text-end pe-3 text-muted small">${earliest} - ${latest}</td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('fourh-tbody').innerHTML = renderRows(fourh);
+      document.getElementById('daily-tbody').innerHTML = renderRows(daily);
+
+      // Chart
+      const tickers = [...new Set(stats.map(s => s.ticker))].sort();
+      const fourhData = tickers.map(t => (fourh.find(s => s.ticker === t) || {}).yes_pct || 0);
+      const dailyData = tickers.map(t => (daily.find(s => s.ticker === t) || {}).yes_pct || 0);
+
+      new Chart(document.getElementById('yesPctChart'), {
+        type: 'bar',
+        data: {
+          labels: tickers.map(t => t.toUpperCase()),
+          datasets: [
+            { label: '4h YES%', data: fourhData, backgroundColor: 'rgba(25,135,84,0.6)' },
+            { label: 'Daily YES%', data: dailyData, backgroundColor: 'rgba(13,110,253,0.6)' },
+          ],
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: { min: 40, max: 60, title: { display: true, text: 'YES Win %' },
+                 ticks: { callback: v => v + '%' } },
+          },
+          plugins: {
+            annotation: { annotations: { line50: { type: 'line', yMin: 50, yMax: 50,
+              borderColor: '#999', borderDash: [5,5], borderWidth: 1 } } },
+          },
+        },
+      });
+
+    } catch (e) {
+      document.getElementById('loading').classList.add('d-none');
+      showToast('Failed to load dashboard: ' + e.message, 'danger');
+    }
+  }
+</script>
+{{ end }}
