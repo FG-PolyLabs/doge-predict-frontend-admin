@@ -119,7 +119,7 @@
                 ${s.tickers ? `<br><span class="text-muted small">Tickers: ${escHtml(s.tickers)}</span>` : ''}
               </div>
               <div class="d-flex gap-1">
-                <a href="${"backtests/" | defined ? "backtests/" : "/backtests/"}?strategy=${s.strategy_id}" class="btn btn-sm btn-outline-success" title="Run backtest">
+                <a href="{{ "backtests/" | relURL }}?strategy=${s.strategy_id}" class="btn btn-sm btn-outline-success" title="Run backtest">
                   <i class="bi bi-play-fill"></i>
                 </a>
                 <button class="btn btn-sm btn-outline-secondary" onclick='editStrategy(${JSON.stringify(s)})'>
