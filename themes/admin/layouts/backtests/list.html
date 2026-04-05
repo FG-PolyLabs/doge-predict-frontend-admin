@@ -1,43 +1,82 @@
 {{ define "main" }}
-<div class="d-flex align-items-center justify-content-between mb-4">
-  <h2 class="h5 mb-0 fw-semibold">{{ .Title }}</h2>
-  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#runModal" onclick="openRunModal()">
-    <i class="bi bi-play-fill me-1"></i>Run Backtest
-  </button>
-</div>
+<h2 class="h5 mb-4 fw-semibold">{{ .Title }}</h2>
 
 <div id="auth-guard" class="alert alert-warning d-none">
   <i class="bi bi-lock me-1"></i>You must be <a href="{{ "" | relURL }}">signed in</a>.
 </div>
 
-<div id="loading" class="text-center py-5">
-  <div class="spinner-border text-primary" role="status"></div>
-</div>
-
-<div id="empty-state" class="text-center py-5 d-none">
-  <i class="bi bi-clock-history fs-1 text-muted"></i>
-  <p class="text-muted mt-2">No backtests yet. Create a strategy first, then run a backtest.</p>
-</div>
-
-<!-- Results list -->
-<div id="runs-list" class="d-none"></div>
-
-<!-- Trade detail modal -->
-<div class="modal fade" id="detailModal" tabindex="-1">
-  <div class="modal-dialog modal-xl">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header border-0">
-        <h5 class="modal-title" id="detail-title">Backtest Details</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<div id="content" class="d-none">
+  <!-- Run backtest form -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white fw-medium">Run Backtest</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label small fw-medium">Strategy</label>
+          <select class="form-select" id="run-strategy" onchange="renderParams()"></select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-medium">Start Date</label>
+          <input type="date" class="form-control" id="run-start">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-medium">End Date</label>
+          <input type="date" class="form-control" id="run-end">
+        </div>
       </div>
-      <div class="modal-body">
-        <div class="row mb-3" id="detail-stats"></div>
-        <canvas id="pnlChart" height="200"></canvas>
-        <h6 class="mt-4 mb-2">Trades</h6>
-        <div class="table-responsive">
-          <table class="table table-sm table-hover">
-            <thead class="table-light">
-              <tr><th>Market</th><th>Ticker</th><th>Dir</th><th>Entry</th><th>Exit</th><th>PnL</th><th>Spread</th></tr>
+
+      <!-- Dynamic params rendered here -->
+      <div class="row g-3 mt-1" id="params-row"></div>
+
+      <div class="row g-3 mt-1">
+        <div class="col-md-4">
+          <label class="form-label small fw-medium">Category (optional)</label>
+          <select class="form-select" id="run-category">
+            <option value="">All</option>
+            <option value="crypto_daily">Daily</option>
+            <option value="crypto_4h">4 Hour</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-medium">Tickers (optional, comma-separated)</label>
+          <input type="text" class="form-control" id="run-tickers" placeholder="btc,eth,doge">
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+          <button class="btn btn-success w-100" id="run-btn" onclick="runBacktest()">
+            <i class="bi bi-play-fill me-1"></i>Run Backtest
+          </button>
+        </div>
+      </div>
+      <div id="run-error" class="alert alert-danger py-2 small mt-2 d-none"></div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="result-card" class="d-none">
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white fw-medium" id="result-title">Results</div>
+      <div class="card-body">
+        <div class="row" id="result-stats"></div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white fw-medium">Cumulative PnL</div>
+      <div class="card-body">
+        <canvas id="pnlChart" height="250"></canvas>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white d-flex justify-content-between">
+        <span class="fw-medium">Trades</span>
+        <span class="text-muted small" id="trade-count"></span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive" style="max-height:400px;overflow-y:auto">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light sticky-top">
+              <tr><th class="ps-3">Market</th><th>Ticker</th><th>Scenario</th><th class="text-end">Cost</th><th class="text-end">PnL</th><th class="text-end pe-3">Resolved</th></tr>
             </thead>
             <tbody id="trades-tbody"></tbody>
           </table>
@@ -45,209 +84,185 @@
       </div>
     </div>
   </div>
-</div>
 
-<!-- Run backtest modal -->
-<div class="modal fade" id="runModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title">Run Backtest</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <label class="form-label small fw-medium">Strategy</label>
-          <select class="form-select" id="run-strategy"></select>
-        </div>
-        <div class="row">
-          <div class="col-6 mb-3">
-            <label class="form-label small fw-medium">Start Date</label>
-            <input type="date" class="form-control" id="run-start">
-          </div>
-          <div class="col-6 mb-3">
-            <label class="form-label small fw-medium">End Date</label>
-            <input type="date" class="form-control" id="run-end">
-          </div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label small fw-medium">Initial Capital ($)</label>
-          <input type="number" class="form-control" id="run-capital" value="1000">
-        </div>
-        <div id="run-error" class="alert alert-danger py-2 small d-none"></div>
-      </div>
-      <div class="modal-footer border-0 pt-0">
-        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-success btn-sm" id="run-btn" onclick="runBacktest()">
-          <i class="bi bi-play-fill me-1"></i>Run
-        </button>
-      </div>
-    </div>
+  <!-- History -->
+  <h5 class="fw-semibold mt-4 mb-3">Previous Runs</h5>
+  <div id="history-loading" class="text-center py-3">
+    <div class="spinner-border spinner-border-sm text-primary"></div>
   </div>
+  <div id="history-list"></div>
 </div>
 {{ end }}
 
 {{ define "page-scripts" }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
-  const runModal = new bootstrap.Modal(document.getElementById('runModal'));
-  const detailModal = new bootstrap.Modal(document.getElementById('detailModal'));
+  let allStrategies = [];
   let pnlChart = null;
 
-  // Set default dates
   const today = new Date().toISOString().slice(0,10);
-  const weekAgo = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
+  const monthAgo = new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
 
   firebase.auth().onAuthStateChanged(async user => {
-    if (!user) { document.getElementById('loading').classList.add('d-none'); document.getElementById('auth-guard').classList.remove('d-none'); return; }
-    await loadRuns();
+    if (!user) { document.getElementById('auth-guard').classList.remove('d-none'); return; }
+    document.getElementById('content').classList.remove('d-none');
+    document.getElementById('run-start').value = monthAgo;
+    document.getElementById('run-end').value = today;
+
+    // Load strategies from API
+    try {
+      allStrategies = await api('GET', '/strategies');
+      const sel = document.getElementById('run-strategy');
+      sel.innerHTML = allStrategies.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+      renderParams();
+
+      // Pre-select from URL param
+      const urlStrategy = new URLSearchParams(window.location.search).get('strategy');
+      if (urlStrategy) sel.value = urlStrategy;
+    } catch (e) { showToast('Failed to load strategies: ' + e.message, 'danger'); }
+
+    await loadHistory();
   });
 
-  async function loadRuns() {
-    document.getElementById('loading').classList.remove('d-none');
-    try {
-      const runs = await api('GET', '/backtests');
-      document.getElementById('loading').classList.add('d-none');
-      if (!runs.length) { document.getElementById('empty-state').classList.remove('d-none'); return; }
-      document.getElementById('runs-list').classList.remove('d-none');
-      document.getElementById('runs-list').innerHTML = runs.map(r => {
-        const pnlClass = r.total_pnl >= 0 ? 'text-success' : 'text-danger';
-        const pnlSign = r.total_pnl >= 0 ? '+' : '';
-        return `
-        <div class="card shadow-sm border-0 mb-3">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-start">
-              <div>
-                <h6 class="fw-semibold mb-1">${escHtml(r.strategy_name || r.strategy_id)}</h6>
-                <span class="text-muted small">${r.start_date} to ${r.end_date} | ${r.num_trades} trades</span>
-              </div>
-              <div class="text-end">
-                <div class="${pnlClass} fw-bold">${pnlSign}$${(r.total_pnl||0).toFixed(2)}</div>
-                <div class="small text-muted">
-                  WR: ${((r.win_rate||0)*100).toFixed(1)}% |
-                  Sharpe: ${(r.sharpe_ratio||0).toFixed(2)} |
-                  DD: ${((r.max_drawdown||0)*100).toFixed(1)}%
-                </div>
-              </div>
-            </div>
-            <div class="mt-2">
-              <button class="btn btn-sm btn-outline-primary" onclick="showDetails('${r.run_id}')">
-                <i class="bi bi-eye me-1"></i>Details
-              </button>
-              <button class="btn btn-sm btn-outline-danger" onclick="deleteRun('${r.run_id}')">
-                <i class="bi bi-trash3"></i>
-              </button>
-            </div>
-          </div>
-        </div>`;
-      }).join('');
-    } catch (e) { document.getElementById('loading').classList.add('d-none'); showToast(e.message, 'danger'); }
-  }
+  function renderParams() {
+    const stratId = document.getElementById('run-strategy').value;
+    const strat = allStrategies.find(s => s.id === stratId);
+    if (!strat) return;
 
-  async function openRunModal() {
-    document.getElementById('run-start').value = weekAgo;
-    document.getElementById('run-end').value = today;
-    document.getElementById('run-error').classList.add('d-none');
-    // Load strategies
-    try {
-      const strats = await api('GET', '/strategies');
-      const sel = document.getElementById('run-strategy');
-      sel.innerHTML = strats.map(s => `<option value="${s.strategy_id}">${escHtml(s.name)} (${s.strategy_type})</option>`).join('');
-      // Check URL param for pre-selected strategy
-      const urlParams = new URLSearchParams(window.location.search);
-      const preselect = urlParams.get('strategy');
-      if (preselect) sel.value = preselect;
-    } catch (e) { showToast('Failed to load strategies: ' + e.message, 'danger'); }
+    document.getElementById('params-row').innerHTML = (strat.params || []).map(p => {
+      return `<div class="col-md-4">
+        <label class="form-label small fw-medium">${p.label}</label>
+        <input type="number" class="form-control" id="param-${p.key}" value="${p.default}" step="${p.step || 0.01}">
+      </div>`;
+    }).join('');
   }
 
   async function runBacktest() {
     const btn = document.getElementById('run-btn');
+    const errEl = document.getElementById('run-error');
     btn.disabled = true;
     btn.innerHTML = '<i class="bi bi-hourglass spin me-1"></i>Running...';
-    const errEl = document.getElementById('run-error');
     errEl.classList.add('d-none');
+
+    const stratId = document.getElementById('run-strategy').value;
+    const strat = allStrategies.find(s => s.id === stratId);
+
+    // Collect params
+    const params = {};
+    for (const p of (strat.params || [])) {
+      const el = document.getElementById(`param-${p.key}`);
+      if (el) params[p.key] = parseFloat(el.value);
+    }
+
+    const category = document.getElementById('run-category').value || null;
+    const tickersStr = document.getElementById('run-tickers').value.trim();
+    const tickers = tickersStr ? tickersStr.split(',').map(t => t.trim()) : null;
+
     try {
       const result = await api('POST', '/backtests/run', {
-        strategy_id: document.getElementById('run-strategy').value,
+        strategy_id: stratId,
+        params: params,
         start_date: document.getElementById('run-start').value,
         end_date: document.getElementById('run-end').value,
-        initial_capital: parseFloat(document.getElementById('run-capital').value),
+        category: category,
+        tickers: tickers,
       });
-      runModal.hide();
-      showToast(`Backtest complete: ${result.summary.num_trades} trades, PnL $${result.summary.total_pnl.toFixed(2)}`, 'success');
-      await loadRuns();
-      document.getElementById('empty-state').classList.add('d-none');
+      showResults(result);
+      showToast(`Backtest complete: ${result.summary.num_trades} markets`, 'success');
+      await loadHistory();
     } catch (e) { errEl.textContent = e.message; errEl.classList.remove('d-none'); }
-    finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run'; }
+    finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Run Backtest'; }
   }
 
-  async function showDetails(runId) {
-    try {
-      const data = await api('GET', `/backtests/${runId}`);
-      const r = data.run;
-      const trades = data.trades;
+  function showResults(result) {
+    const r = result.summary;
+    const trades = result.trades;
 
-      document.getElementById('detail-title').textContent = `${r.strategy_name} — ${r.start_date} to ${r.end_date}`;
+    document.getElementById('result-card').classList.remove('d-none');
+    document.getElementById('result-title').textContent = `${r.strategy_name} | ${r.start_date} to ${r.end_date}`;
 
-      // Stats row
-      const pnlClass = r.total_pnl >= 0 ? 'text-success' : 'text-danger';
-      const roi = ((r.total_return || 0) * 100).toFixed(2);
-      let statsHtml = `
-        <div class="col-3 text-center"><div class="text-muted small">PnL</div><div class="fw-bold ${pnlClass}">$${(r.total_pnl||0).toFixed(2)}</div></div>
-        <div class="col-3 text-center"><div class="text-muted small">ROI</div><div class="fw-bold ${pnlClass}">${roi}%</div></div>
-        <div class="col-3 text-center"><div class="text-muted small">Win Rate</div><div class="fw-bold">${((r.win_rate||0)*100).toFixed(1)}%</div></div>
-        <div class="col-3 text-center"><div class="text-muted small">Sharpe</div><div class="fw-bold">${(r.sharpe_ratio||0).toFixed(2)}</div></div>
+    const pnlClass = r.total_pnl >= 0 ? 'text-success' : 'text-danger';
+    let stats = `
+      <div class="col-3 text-center"><div class="text-muted small">Total PnL</div><div class="fw-bold fs-5 ${pnlClass}">$${(r.total_pnl||0).toFixed(2)}</div></div>
+      <div class="col-3 text-center"><div class="text-muted small">Markets</div><div class="fw-bold">${r.num_trades}</div></div>
+      <div class="col-3 text-center"><div class="text-muted small">Win Rate</div><div class="fw-bold">${((r.win_rate||0)*100).toFixed(1)}%</div></div>
+      <div class="col-3 text-center"><div class="text-muted small">Avg PnL/Market</div><div class="fw-bold ${pnlClass}">$${r.num_trades ? (r.total_pnl/r.num_trades).toFixed(4) : '0'}</div></div>
+    `;
+
+    // Market maker specific
+    if (r.both_fill_count !== undefined) {
+      stats += `
+      <div class="col-3 text-center mt-3"><div class="text-muted small">Both Fill</div><div class="fw-bold text-success">${r.both_fill_pct}% (${r.both_fill_count})</div></div>
+      <div class="col-3 text-center mt-3"><div class="text-muted small">One Fill (loss)</div><div class="fw-bold text-danger">${r.one_fill_pct}% (${r.one_fill_count})</div></div>
+      <div class="col-3 text-center mt-3"><div class="text-muted small">Both Fill Profit</div><div class="fw-bold text-success">$${(r.both_fill_profit||0).toFixed(2)}</div></div>
+      <div class="col-3 text-center mt-3"><div class="text-muted small">One Fill Loss</div><div class="fw-bold text-danger">$${(r.one_fill_loss||0).toFixed(2)}</div></div>
       `;
-      // Market maker specific stats
-      if (r.both_fill_pct !== undefined) {
-        statsHtml += `
-        <div class="col-3 text-center mt-2"><div class="text-muted small">Both Fill</div><div class="fw-bold text-success">${r.both_fill_pct}% (${r.both_fill_count})</div></div>
-        <div class="col-3 text-center mt-2"><div class="text-muted small">One Fill</div><div class="fw-bold text-warning">${r.one_fill_pct}% (${r.one_fill_count})</div></div>
-        <div class="col-3 text-center mt-2"><div class="text-muted small">No Fill</div><div class="fw-bold">${r.no_fill_count}</div></div>
-        <div class="col-3 text-center mt-2"><div class="text-muted small">Limit Price</div><div class="fw-bold">${(r.limit_price*100).toFixed(0)}c</div></div>
-        `;
-      } else {
-        statsHtml += `<div class="col-3 text-center"><div class="text-muted small">Max DD</div><div class="fw-bold text-danger">${((r.max_drawdown||0)*100).toFixed(1)}%</div></div>`;
-      }
-      document.getElementById('detail-stats').innerHTML = statsHtml;
+    }
 
-      // PnL chart (cumulative)
-      let cum = r.initial_capital || 1000;
-      const chartData = [{x: 0, y: cum}];
-      trades.forEach((t, i) => { cum += t.pnl || 0; chartData.push({x: i+1, y: cum}); });
+    document.getElementById('result-stats').innerHTML = stats;
 
-      const ctx = document.getElementById('pnlChart').getContext('2d');
-      if (pnlChart) pnlChart.destroy();
-      pnlChart = new Chart(ctx, {
-        type: 'line',
-        data: { datasets: [{ label: 'Capital ($)', data: chartData, borderColor: cum >= (r.initial_capital||1000) ? '#198754' : '#dc3545', fill: false, tension: 0.2, pointRadius: 1 }] },
-        options: { responsive: true, scales: { x: { title: { display: true, text: 'Trade #' } }, y: { title: { display: true, text: 'Capital ($)' } } }, plugins: { legend: { display: false } } },
-      });
+    // PnL chart
+    let cum = 0;
+    const chartData = [{x: 0, y: 0}];
+    trades.forEach((t, i) => { cum += t.pnl || 0; chartData.push({x: i+1, y: parseFloat(cum.toFixed(2))}); });
 
-      // Trades table
-      document.getElementById('trades-tbody').innerHTML = trades.map(t => {
-        const pnlC = t.pnl >= 0 ? 'text-success' : 'text-danger';
-        return `<tr>
-          <td class="small">${escHtml((t.market_slug||'').slice(0,30))}</td>
-          <td>${t.ticker||''}</td>
-          <td><span class="badge bg-${t.direction==='yes'?'success':'danger'}-subtle text-${t.direction==='yes'?'success':'danger'}">${t.direction}</span></td>
-          <td>${(t.entry_price||0).toFixed(3)}</td>
-          <td>${(t.exit_price||0).toFixed(1)}</td>
-          <td class="${pnlC}">${t.pnl >= 0 ? '+' : ''}${(t.pnl||0).toFixed(3)}</td>
-          <td>${t.spread_at_entry != null ? (t.spread_at_entry*100).toFixed(1)+'c' : '-'}</td>
-        </tr>`;
+    const ctx = document.getElementById('pnlChart').getContext('2d');
+    if (pnlChart) pnlChart.destroy();
+    pnlChart = new Chart(ctx, {
+      type: 'line',
+      data: { datasets: [{ label: 'Cumulative PnL ($)', data: chartData,
+        borderColor: cum >= 0 ? '#198754' : '#dc3545', fill: false, tension: 0.1, pointRadius: 1, borderWidth: 2 }] },
+      options: { responsive: true,
+        scales: { x: { title: { display: true, text: 'Trade #' } }, y: { title: { display: true, text: 'PnL ($)' } } },
+        plugins: { legend: { display: false } } },
+    });
+
+    // Trades table
+    document.getElementById('trade-count').textContent = `${trades.length} trades`;
+    const scenarioColors = {both_fill:'success', yes_only:'warning', no_only:'warning', no_fill:'secondary'};
+    document.getElementById('trades-tbody').innerHTML = trades.map(t => {
+      const pClass = t.pnl > 0 ? 'text-success' : (t.pnl < 0 ? 'text-danger' : 'text-muted');
+      const badge = scenarioColors[t.direction] || 'secondary';
+      return `<tr>
+        <td class="ps-3 small">${(t.market_slug||'').slice(0,40)}</td>
+        <td>${(t.ticker||'').toUpperCase()}</td>
+        <td><span class="badge bg-${badge}-subtle text-${badge}">${t.direction}</span></td>
+        <td class="text-end">${t.entry_price ? '$'+t.entry_price.toFixed(2) : '-'}</td>
+        <td class="text-end ${pClass}">${t.pnl >= 0 ? '+' : ''}$${(t.pnl||0).toFixed(4)}</td>
+        <td class="text-end pe-3">${t.market_end_date ? new Date(t.market_end_date).toLocaleDateString() : '-'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  async function loadHistory() {
+    try {
+      const runs = await api('GET', '/backtests');
+      document.getElementById('history-loading').classList.add('d-none');
+      if (!runs.length) { document.getElementById('history-list').innerHTML = '<p class="text-muted small">No previous runs.</p>'; return; }
+
+      document.getElementById('history-list').innerHTML = runs.map(r => {
+        const pnlClass = r.total_pnl >= 0 ? 'text-success' : 'text-danger';
+        return `
+        <div class="card border-0 shadow-sm mb-2">
+          <div class="card-body py-2 px-3 d-flex justify-content-between align-items-center">
+            <div>
+              <span class="fw-medium small">${r.strategy_name || r.strategy_id}</span>
+              <span class="text-muted small ms-2">${r.start_date} to ${r.end_date} | ${r.num_trades} mkts</span>
+            </div>
+            <div>
+              <span class="${pnlClass} fw-bold">$${(r.total_pnl||0).toFixed(2)}</span>
+              <button class="btn btn-sm btn-outline-danger ms-2" onclick="deleteRun('${r.run_id}')"><i class="bi bi-trash3"></i></button>
+            </div>
+          </div>
+        </div>`;
       }).join('');
-
-      detailModal.show();
-    } catch (e) { showToast(e.message, 'danger'); }
+    } catch (e) { document.getElementById('history-loading').classList.add('d-none'); }
   }
 
   async function deleteRun(id) {
-    if (!confirm('Delete this backtest run?')) return;
-    try { await api('DELETE', `/backtests/${id}`); await loadRuns(); }
+    if (!confirm('Delete this run?')) return;
+    try { await api('DELETE', `/backtests/${id}`); await loadHistory(); }
     catch (e) { showToast(e.message, 'danger'); }
   }
-
-  function escHtml(s) { const d = document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
 </script>
 {{ end }}

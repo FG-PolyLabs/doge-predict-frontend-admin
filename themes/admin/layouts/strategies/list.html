@@ -1,10 +1,5 @@
 {{ define "main" }}
-<div class="d-flex align-items-center justify-content-between mb-4">
-  <h2 class="h5 mb-0 fw-semibold">{{ .Title }}</h2>
-  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#stratModal" onclick="openCreateModal()">
-    <i class="bi bi-plus-lg me-1"></i>New Strategy
-  </button>
-</div>
+<h2 class="h5 mb-4 fw-semibold">{{ .Title }}</h2>
 
 <div id="auth-guard" class="alert alert-warning d-none">
   <i class="bi bi-lock me-1"></i>You must be <a href="{{ "" | relURL }}">signed in</a>.
@@ -14,192 +9,44 @@
   <div class="spinner-border text-primary" role="status"></div>
 </div>
 
-<div id="empty-state" class="text-center py-5 d-none">
-  <i class="bi bi-graph-up-arrow fs-1 text-muted"></i>
-  <p class="text-muted mt-2">No strategies yet. Create one to start backtesting.</p>
-</div>
-
 <div id="strats-list" class="d-none"></div>
-
-<!-- Create/Edit Modal -->
-<div class="modal fade" id="stratModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title" id="modal-title">New Strategy</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="strat-id">
-        <div class="mb-3">
-          <label class="form-label small fw-medium">Name</label>
-          <input type="text" class="form-control" id="strat-name" placeholder="My Strategy">
-        </div>
-        <div class="mb-3">
-          <label class="form-label small fw-medium">Type</label>
-          <select class="form-select" id="strat-type" onchange="updateParamsUI()">
-            <option value="market_maker">Market Maker at Open (dual limit orders)</option>
-          </select>
-        </div>
-        <div class="mb-3" id="params-section"></div>
-        <div class="mb-3">
-          <label class="form-label small fw-medium">Tickers (blank = all)</label>
-          <input type="text" class="form-control" id="strat-tickers" placeholder="btc,eth,doge">
-        </div>
-        <div class="mb-3">
-          <label class="form-label small fw-medium">Intervals (blank = all)</label>
-          <input type="text" class="form-control" id="strat-intervals" placeholder="5m,15m">
-        </div>
-        <div class="mb-3">
-          <label class="form-label small fw-medium">Description</label>
-          <textarea class="form-control" id="strat-desc" rows="2"></textarea>
-        </div>
-        <div id="modal-error" class="alert alert-danger py-2 small d-none"></div>
-      </div>
-      <div class="modal-footer border-0 pt-0">
-        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="saveStrategy()">Save</button>
-      </div>
-    </div>
-  </div>
-</div>
 {{ end }}
 
 {{ define "page-scripts" }}
 <script>
-  const stratModal = new bootstrap.Modal(document.getElementById('stratModal'));
-  const PARAM_TEMPLATES = {
-    market_maker: [
-      {key: 'limit_price', label: 'Limit price (e.g. 0.48 = buy at 48c)', type: 'number', default: 0.48, step: 0.01},
-    ],
-  };
-
   firebase.auth().onAuthStateChanged(async user => {
     if (!user) { document.getElementById('loading').classList.add('d-none'); document.getElementById('auth-guard').classList.remove('d-none'); return; }
     await loadStrategies();
   });
 
   async function loadStrategies() {
-    document.getElementById('loading').classList.remove('d-none');
     try {
       const strats = await api('GET', '/strategies');
       document.getElementById('loading').classList.add('d-none');
-      if (!strats.length) { document.getElementById('empty-state').classList.remove('d-none'); return; }
       document.getElementById('strats-list').classList.remove('d-none');
+
       document.getElementById('strats-list').innerHTML = strats.map(s => {
-        const params = typeof s.params === 'string' ? JSON.parse(s.params || '{}') : (s.params || {});
-        const paramStr = Object.entries(params).map(([k,v]) => `${k}=${v}`).join(', ') || 'none';
-        const typeBadge = {always_yes:'success',always_no:'danger',momentum:'primary',contrarian:'warning',spread_filter:'info'}[s.strategy_type] || 'secondary';
+        const paramsDesc = s.params.map(p => `${p.label}: ${p.default}`).join(', ');
         return `
         <div class="card shadow-sm border-0 mb-3">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
               <div>
                 <h6 class="fw-semibold mb-1">${escHtml(s.name)}</h6>
-                <span class="badge bg-${typeBadge}-subtle text-${typeBadge} me-2">${s.strategy_type}</span>
-                <span class="text-muted small">Params: ${escHtml(paramStr)}</span>
-                ${s.tickers ? `<br><span class="text-muted small">Tickers: ${escHtml(s.tickers)}</span>` : ''}
+                <p class="text-muted small mb-1">${escHtml(s.description)}</p>
+                <span class="text-muted small">Default params: ${escHtml(paramsDesc)}</span>
               </div>
-              <div class="d-flex gap-1">
-                <a href="{{ "backtests/" | relURL }}?strategy=${s.strategy_id}" class="btn btn-sm btn-outline-success" title="Run backtest">
-                  <i class="bi bi-play-fill"></i>
-                </a>
-                <button class="btn btn-sm btn-outline-secondary" onclick='editStrategy(${JSON.stringify(s)})'>
-                  <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteStrategy('${s.strategy_id}')">
-                  <i class="bi bi-trash3"></i>
-                </button>
-              </div>
+              <a href="{{ "backtests/" | relURL }}?strategy=${s.id}" class="btn btn-sm btn-success">
+                <i class="bi bi-play-fill me-1"></i>Run Backtest
+              </a>
             </div>
           </div>
         </div>`;
       }).join('');
-    } catch (e) { document.getElementById('loading').classList.add('d-none'); showToast(e.message, 'danger'); }
-  }
-
-  function updateParamsUI() {
-    const type = document.getElementById('strat-type').value;
-    const section = document.getElementById('params-section');
-    const fields = PARAM_TEMPLATES[type] || [];
-    if (!fields.length) { section.innerHTML = ''; return; }
-    section.innerHTML = '<label class="form-label small fw-medium">Parameters</label>' +
-      fields.map(f => {
-        if (f.type === 'select') {
-          return `<div class="mb-2"><label class="form-label small">${f.label}</label>
-            <select class="form-select form-select-sm" id="param-${f.key}">
-              ${f.options.map(o => `<option value="${o}" ${o===f.default?'selected':''}>${o}</option>`).join('')}
-            </select></div>`;
-        }
-        return `<div class="mb-2"><label class="form-label small">${f.label}</label>
-          <input type="number" class="form-control form-control-sm" id="param-${f.key}" value="${f.default}" step="${f.step||1}"></div>`;
-      }).join('');
-  }
-
-  function getParams() {
-    const type = document.getElementById('strat-type').value;
-    const fields = PARAM_TEMPLATES[type] || [];
-    const params = {};
-    for (const f of fields) {
-      const el = document.getElementById(`param-${f.key}`);
-      if (el) params[f.key] = f.type === 'number' ? parseFloat(el.value) : el.value;
+    } catch (e) {
+      document.getElementById('loading').classList.add('d-none');
+      showToast(e.message, 'danger');
     }
-    return params;
-  }
-
-  function openCreateModal() {
-    document.getElementById('modal-title').textContent = 'New Strategy';
-    document.getElementById('strat-id').value = '';
-    document.getElementById('strat-name').value = '';
-    document.getElementById('strat-type').value = 'always_yes';
-    document.getElementById('strat-tickers').value = '';
-    document.getElementById('strat-intervals').value = '';
-    document.getElementById('strat-desc').value = '';
-    document.getElementById('modal-error').classList.add('d-none');
-    updateParamsUI();
-  }
-
-  function editStrategy(s) {
-    document.getElementById('modal-title').textContent = 'Edit Strategy';
-    document.getElementById('strat-id').value = s.strategy_id;
-    document.getElementById('strat-name').value = s.name;
-    document.getElementById('strat-type').value = s.strategy_type;
-    document.getElementById('strat-tickers').value = s.tickers || '';
-    document.getElementById('strat-intervals').value = s.intervals || '';
-    document.getElementById('strat-desc').value = s.description || '';
-    updateParamsUI();
-    const params = typeof s.params === 'string' ? JSON.parse(s.params || '{}') : (s.params || {});
-    for (const [k,v] of Object.entries(params)) {
-      const el = document.getElementById(`param-${k}`);
-      if (el) el.value = v;
-    }
-    stratModal.show();
-  }
-
-  async function saveStrategy() {
-    const id = document.getElementById('strat-id').value;
-    const body = {
-      name: document.getElementById('strat-name').value.trim(),
-      strategy_type: document.getElementById('strat-type').value,
-      params: getParams(),
-      tickers: document.getElementById('strat-tickers').value.trim(),
-      intervals: document.getElementById('strat-intervals').value.trim(),
-      description: document.getElementById('strat-desc').value.trim(),
-    };
-    if (!body.name) { document.getElementById('modal-error').textContent = 'Name required'; document.getElementById('modal-error').classList.remove('d-none'); return; }
-    try {
-      if (id) { await api('PUT', `/strategies/${id}`, body); }
-      else { await api('POST', '/strategies', body); }
-      stratModal.hide();
-      await loadStrategies();
-      document.getElementById('empty-state').classList.add('d-none');
-    } catch (e) { document.getElementById('modal-error').textContent = e.message; document.getElementById('modal-error').classList.remove('d-none'); }
-  }
-
-  async function deleteStrategy(id) {
-    if (!confirm('Delete this strategy?')) return;
-    try { await api('DELETE', `/strategies/${id}`); await loadStrategies(); }
-    catch (e) { showToast(e.message, 'danger'); }
   }
 
   function escHtml(s) { const d = document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
