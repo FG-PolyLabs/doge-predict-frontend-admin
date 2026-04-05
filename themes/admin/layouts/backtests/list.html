@@ -199,6 +199,21 @@
       `;
     }
 
+    // Buy YES limit specific
+    if (r.filled_count !== undefined) {
+      const wrClass = r.win_rate_of_filled > r.breakeven_win_rate ? 'text-success' : 'text-danger';
+      stats += `
+      <div class="col-3 text-center mt-3"><div class="text-muted small">Filled</div><div class="fw-bold">${r.fill_rate_pct}% (${r.filled_count})</div></div>
+      <div class="col-3 text-center mt-3"><div class="text-muted small">Not Filled</div><div class="fw-bold text-muted">${r.not_filled_count}</div></div>
+      <div class="col-3 text-center mt-3"><div class="text-muted small">Win Rate (filled)</div><div class="fw-bold ${wrClass}">${r.win_rate_of_filled}%</div></div>
+      <div class="col-3 text-center mt-3"><div class="text-muted small">Breakeven WR</div><div class="fw-bold">${r.breakeven_win_rate}%</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Profit/Win</div><div class="fw-bold text-success">+$${r.profit_per_win}</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Loss/Loss</div><div class="fw-bold text-danger">-$${r.loss_per_loss}</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Wins</div><div class="fw-bold text-success">${r.wins}</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Losses</div><div class="fw-bold text-danger">${r.losses}</div></div>
+      `;
+    }
+
     document.getElementById('result-stats').innerHTML = stats;
 
     // PnL chart
