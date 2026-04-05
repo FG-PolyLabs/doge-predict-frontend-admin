@@ -18,6 +18,12 @@
           </a>
         </li>
         <li class="nav-item">
+          <a class="nav-link nav-admin-only{{ if eq .RelPermalink "/price-history/" }} active{{ end }}"
+             href="{{ "price-history/" | relURL }}" title="Admin access required">
+            <i class="bi bi-graph-up me-1"></i>Price History
+          </a>
+        </li>
+        <li class="nav-item">
           <a class="nav-link nav-admin-only{{ if eq .RelPermalink "/tokens/" }} active{{ end }}"
              href="{{ "tokens/" | relURL }}" title="Admin access required">
             <i class="bi bi-coin me-1"></i>Tokens
