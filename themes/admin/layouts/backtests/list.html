@@ -158,15 +158,18 @@
     const tickersStr = document.getElementById('run-tickers').value.trim();
     const tickers = tickersStr ? tickersStr.split(',').map(t => t.trim()) : null;
 
+    const payload = {
+      strategy_id: stratId,
+      params: params,
+      start_date: document.getElementById('run-start').value,
+      end_date: document.getElementById('run-end').value,
+      category: category,
+      tickers: tickers,
+    };
+    console.log('Backtest payload:', JSON.stringify(payload));
+
     try {
-      const result = await api('POST', '/backtests/run', {
-        strategy_id: stratId,
-        params: params,
-        start_date: document.getElementById('run-start').value,
-        end_date: document.getElementById('run-end').value,
-        category: category,
-        tickers: tickers,
-      });
+      const result = await api('POST', '/backtests/run', payload);
       showResults(result);
       showToast(`Backtest complete: ${result.summary.num_trades} markets`, 'success');
       await loadHistory();
