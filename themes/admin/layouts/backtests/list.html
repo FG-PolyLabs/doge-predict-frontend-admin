@@ -191,12 +191,25 @@
 
       // Stats row
       const pnlClass = r.total_pnl >= 0 ? 'text-success' : 'text-danger';
-      document.getElementById('detail-stats').innerHTML = `
+      const roi = ((r.total_return || 0) * 100).toFixed(2);
+      let statsHtml = `
         <div class="col-3 text-center"><div class="text-muted small">PnL</div><div class="fw-bold ${pnlClass}">$${(r.total_pnl||0).toFixed(2)}</div></div>
+        <div class="col-3 text-center"><div class="text-muted small">ROI</div><div class="fw-bold ${pnlClass}">${roi}%</div></div>
         <div class="col-3 text-center"><div class="text-muted small">Win Rate</div><div class="fw-bold">${((r.win_rate||0)*100).toFixed(1)}%</div></div>
         <div class="col-3 text-center"><div class="text-muted small">Sharpe</div><div class="fw-bold">${(r.sharpe_ratio||0).toFixed(2)}</div></div>
-        <div class="col-3 text-center"><div class="text-muted small">Max DD</div><div class="fw-bold text-danger">${((r.max_drawdown||0)*100).toFixed(1)}%</div></div>
       `;
+      // Market maker specific stats
+      if (r.both_fill_pct !== undefined) {
+        statsHtml += `
+        <div class="col-3 text-center mt-2"><div class="text-muted small">Both Fill</div><div class="fw-bold text-success">${r.both_fill_pct}% (${r.both_fill_count})</div></div>
+        <div class="col-3 text-center mt-2"><div class="text-muted small">One Fill</div><div class="fw-bold text-warning">${r.one_fill_pct}% (${r.one_fill_count})</div></div>
+        <div class="col-3 text-center mt-2"><div class="text-muted small">No Fill</div><div class="fw-bold">${r.no_fill_count}</div></div>
+        <div class="col-3 text-center mt-2"><div class="text-muted small">Limit Price</div><div class="fw-bold">${(r.limit_price*100).toFixed(0)}c</div></div>
+        `;
+      } else {
+        statsHtml += `<div class="col-3 text-center"><div class="text-muted small">Max DD</div><div class="fw-bold text-danger">${((r.max_drawdown||0)*100).toFixed(1)}%</div></div>`;
+      }
+      document.getElementById('detail-stats').innerHTML = statsHtml;
 
       // PnL chart (cumulative)
       let cum = r.initial_capital || 1000;
