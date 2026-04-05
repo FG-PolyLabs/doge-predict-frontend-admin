@@ -38,12 +38,7 @@
         <div class="mb-3">
           <label class="form-label small fw-medium">Type</label>
           <select class="form-select" id="strat-type" onchange="updateParamsUI()">
-            <option value="market_maker">Market Maker (dual limit orders)</option>
-            <option value="always_yes">Always YES (baseline)</option>
-            <option value="always_no">Always NO (baseline)</option>
-            <option value="momentum">Momentum (follow price trend)</option>
-            <option value="contrarian">Contrarian (bet against crowd)</option>
-            <option value="spread_filter">Spread Filter (only tight spreads)</option>
+            <option value="market_maker">Market Maker at Open (dual limit orders)</option>
           </select>
         </div>
         <div class="mb-3" id="params-section"></div>
@@ -76,19 +71,6 @@
   const PARAM_TEMPLATES = {
     market_maker: [
       {key: 'limit_price', label: 'Limit price (e.g. 0.48 = buy at 48c)', type: 'number', default: 0.48, step: 0.01},
-    ],
-    always_yes: [],
-    always_no: [],
-    momentum: [
-      {key: 'lookback_minutes', label: 'Lookback (min)', type: 'number', default: 30},
-      {key: 'min_change_pct', label: 'Min change %', type: 'number', default: 0.1, step: 0.01},
-    ],
-    contrarian: [
-      {key: 'threshold', label: 'Price threshold', type: 'number', default: 0.35, step: 0.01},
-    ],
-    spread_filter: [
-      {key: 'max_spread', label: 'Max spread', type: 'number', default: 0.04, step: 0.01},
-      {key: 'direction', label: 'Direction', type: 'select', options: ['yes','no'], default: 'yes'},
     ],
   };
 
