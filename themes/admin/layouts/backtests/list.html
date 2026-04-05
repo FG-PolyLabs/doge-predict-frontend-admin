@@ -41,13 +41,50 @@
           <label class="form-label small fw-medium">Tickers (optional, comma-separated)</label>
           <input type="text" class="form-control" id="run-tickers" placeholder="btc,eth,doge">
         </div>
-        <div class="col-md-4 d-flex align-items-end">
-          <button class="btn btn-success w-100" id="run-btn" onclick="runBacktest()">
-            <i class="bi bi-play-fill me-1"></i>Run Backtest
+        <div class="col-md-4 d-flex align-items-end gap-2">
+          <button class="btn btn-success flex-grow-1" id="run-btn" onclick="runBacktest()">
+            <i class="bi bi-play-fill me-1"></i>Run
+          </button>
+          <button class="btn btn-outline-primary flex-grow-1 d-none" id="sweep-btn" onclick="runSweep()">
+            <i class="bi bi-grid-3x3 me-1"></i>Sweep Grid
           </button>
         </div>
       </div>
       <div id="run-error" class="alert alert-danger py-2 small mt-2 d-none"></div>
+    </div>
+  </div>
+
+  <!-- Sweep Grid -->
+  <div id="sweep-card" class="d-none">
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white fw-medium" id="sweep-title">Price Sweep</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th class="ps-3">Price</th>
+                <th class="text-end">Filled</th>
+                <th class="text-end">Fill %</th>
+                <th class="text-end">Wins</th>
+                <th class="text-end">Losses</th>
+                <th class="text-end">Win Rate</th>
+                <th class="text-end">Breakeven</th>
+                <th class="text-end">PnL</th>
+                <th class="text-end">ROI/Trade</th>
+                <th class="text-end pe-3">Total ROI</th>
+              </tr>
+            </thead>
+            <tbody id="sweep-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white fw-medium">ROI by Limit Price</div>
+      <div class="card-body">
+        <canvas id="sweepChart" height="250"></canvas>
+      </div>
     </div>
   </div>
 
@@ -124,6 +161,8 @@
     await loadHistory();
   });
 
+  let sweepChart = null;
+
   function renderParams() {
     const stratId = document.getElementById('run-strategy').value;
     const strat = allStrategies.find(s => s.id === stratId);
@@ -135,6 +174,14 @@
         <input type="number" class="form-control" id="param-${p.key}" value="${p.default}" step="${p.step || 0.01}">
       </div>`;
     }).join('');
+
+    // Show sweep button if strategy supports it
+    const sweepBtn = document.getElementById('sweep-btn');
+    if (strat.sweep) {
+      sweepBtn.classList.remove('d-none');
+    } else {
+      sweepBtn.classList.add('d-none');
+    }
   }
 
   async function runBacktest() {
@@ -255,6 +302,90 @@
         <td class="text-end pe-3">${t.market_end_date ? new Date(t.market_end_date).toLocaleDateString() : '-'}</td>
       </tr>`;
     }).join('');
+  }
+
+  async function runSweep() {
+    const btn = document.getElementById('sweep-btn');
+    const errEl = document.getElementById('run-error');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass spin me-1"></i>Sweeping...';
+    errEl.classList.add('d-none');
+
+    const stratId = document.getElementById('run-strategy').value;
+    const strat = allStrategies.find(s => s.id === stratId);
+    if (!strat || !strat.sweep) return;
+
+    const category = document.getElementById('run-category').value || null;
+    const tickersStr = document.getElementById('run-tickers').value.trim();
+    const tickers = tickersStr ? tickersStr.split(',').map(t => t.trim()) : null;
+
+    try {
+      const data = await api('POST', '/backtests/sweep', {
+        strategy_id: stratId,
+        sweep_key: strat.sweep.key,
+        sweep_min: strat.sweep.min,
+        sweep_max: strat.sweep.max,
+        sweep_step: strat.sweep.step,
+        start_date: document.getElementById('run-start').value,
+        end_date: document.getElementById('run-end').value,
+        category: category,
+        tickers: tickers,
+      });
+
+      showSweepResults(data, strat);
+    } catch (e) { errEl.textContent = e.message; errEl.classList.remove('d-none'); }
+    finally { btn.disabled = false; btn.innerHTML = '<i class="bi bi-grid-3x3 me-1"></i>Sweep Grid'; }
+  }
+
+  function showSweepResults(data, strat) {
+    document.getElementById('sweep-card').classList.remove('d-none');
+    document.getElementById('sweep-title').textContent = `${strat.name} - Price Sweep (${data.results.length} prices)`;
+
+    const tbody = document.getElementById('sweep-tbody');
+    tbody.innerHTML = data.results.map(r => {
+      const roiClass = (r.roi_per_trade_pct || 0) >= 0 ? 'text-success' : 'text-danger';
+      const pnlClass = r.total_pnl >= 0 ? 'text-success' : 'text-danger';
+      const wrFilled = r.win_rate_of_filled || 0;
+      const be = r.breakeven_win_rate || 0;
+      const wrClass = wrFilled > be ? 'text-success' : 'text-danger';
+      return `<tr>
+        <td class="ps-3 fw-medium">${(r.param_value*100).toFixed(0)}c</td>
+        <td class="text-end">${r.filled_count || 0}</td>
+        <td class="text-end">${r.fill_rate_pct || 0}%</td>
+        <td class="text-end text-success">${r.wins || 0}</td>
+        <td class="text-end text-danger">${r.losses || 0}</td>
+        <td class="text-end ${wrClass}">${wrFilled}%</td>
+        <td class="text-end">${be}%</td>
+        <td class="text-end ${pnlClass}">$${r.total_pnl.toFixed(2)}</td>
+        <td class="text-end ${roiClass}">${r.roi_per_trade_pct || 0}%</td>
+        <td class="text-end pe-3 ${roiClass}">${r.total_roi_pct || 0}%</td>
+      </tr>`;
+    }).join('');
+
+    // Chart
+    const labels = data.results.map(r => (r.param_value*100).toFixed(0) + 'c');
+    const rois = data.results.map(r => r.roi_per_trade_pct || 0);
+    const pnls = data.results.map(r => r.total_pnl);
+
+    const ctx = document.getElementById('sweepChart').getContext('2d');
+    if (sweepChart) sweepChart.destroy();
+    sweepChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'ROI per Trade %', data: rois, backgroundColor: rois.map(v => v >= 0 ? 'rgba(25,135,84,0.7)' : 'rgba(220,53,69,0.7)'), yAxisID: 'y' },
+          { label: 'Total PnL ($)', data: pnls, type: 'line', borderColor: '#0d6efd', backgroundColor: 'transparent', pointRadius: 3, borderWidth: 2, yAxisID: 'y1' },
+        ],
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { position: 'left', title: { display: true, text: 'ROI %' }, ticks: { callback: v => v + '%' } },
+          y1: { position: 'right', title: { display: true, text: 'PnL ($)' }, grid: { drawOnChartArea: false }, ticks: { callback: v => '$' + v } },
+        },
+      },
+    });
   }
 
   async function loadHistory() {
