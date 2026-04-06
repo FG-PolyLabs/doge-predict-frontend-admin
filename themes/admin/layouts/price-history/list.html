@@ -287,7 +287,7 @@
     const ticker = document.getElementById('pctile-ticker').value;
     const data = (window._pctileData || []).filter(r => r.ticker === ticker);
 
-    const labels = data.map(r => `${r.bucket_52w}-${r.bucket_52w+10}%`);
+    const labels = data.map(r => `${r.bucket || r.bucket_52w}-${(r.bucket || r.bucket_52w)+10}%`);
     const upPcts = data.map(r => r.up_pct);
 
     const ctx = document.getElementById('pctileChart').getContext('2d');
