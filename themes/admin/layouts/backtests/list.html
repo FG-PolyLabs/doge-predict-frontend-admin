@@ -50,6 +50,21 @@
           </button>
         </div>
       </div>
+      <!-- Sweep range config -->
+      <div class="row g-3 mt-1 d-none" id="sweep-config">
+        <div class="col-md-3">
+          <label class="form-label small fw-medium">Sweep Min</label>
+          <input type="number" class="form-control" id="sweep-min" value="0.40" step="0.01">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-medium">Sweep Max</label>
+          <input type="number" class="form-control" id="sweep-max" value="0.50" step="0.01">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-medium">Step</label>
+          <input type="number" class="form-control" id="sweep-step" value="0.01" step="0.005">
+        </div>
+      </div>
       <div id="run-error" class="alert alert-danger py-2 small mt-2 d-none"></div>
     </div>
   </div>
@@ -175,12 +190,18 @@
       </div>`;
     }).join('');
 
-    // Show sweep button if strategy supports it
+    // Show sweep config if strategy supports it
     const sweepBtn = document.getElementById('sweep-btn');
+    const sweepConfig = document.getElementById('sweep-config');
     if (strat.sweep) {
       sweepBtn.classList.remove('d-none');
+      sweepConfig.classList.remove('d-none');
+      document.getElementById('sweep-min').value = strat.sweep.min;
+      document.getElementById('sweep-max').value = strat.sweep.max;
+      document.getElementById('sweep-step').value = strat.sweep.step;
     } else {
       sweepBtn.classList.add('d-none');
+      sweepConfig.classList.add('d-none');
     }
   }
 
@@ -323,9 +344,9 @@
       const data = await api('POST', '/backtests/sweep', {
         strategy_id: stratId,
         sweep_key: strat.sweep.key,
-        sweep_min: strat.sweep.min,
-        sweep_max: strat.sweep.max,
-        sweep_step: strat.sweep.step,
+        sweep_min: parseFloat(document.getElementById('sweep-min').value),
+        sweep_max: parseFloat(document.getElementById('sweep-max').value),
+        sweep_step: parseFloat(document.getElementById('sweep-step').value),
         start_date: document.getElementById('run-start').value,
         end_date: document.getElementById('run-end').value,
         category: category,
