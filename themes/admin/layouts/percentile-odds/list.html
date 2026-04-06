@@ -17,7 +17,14 @@
   <!-- Ticker selector -->
   <div class="mb-3">
     <select class="form-select" style="width:200px;display:inline-block" id="ticker-select" onchange="renderAll()"></select>
-    <span class="text-muted small ms-2" id="current-label"></span>
+  </div>
+
+  <!-- Current percentile position card -->
+  <div class="card shadow-sm border-0 mb-4" id="current-card">
+    <div class="card-header bg-white fw-medium">Current Position — <span id="current-ticker"></span></div>
+    <div class="card-body py-3">
+      <div class="row g-3" id="current-pctiles"></div>
+    </div>
   </div>
 
   <div class="tab-content">
@@ -118,13 +125,51 @@
   function renderAll() {
     const ticker = document.getElementById('ticker-select').value;
 
-    // Update current label
+    // Current position card
     const cd = currentDaily.find(c => c.ticker === ticker);
     const c4 = current4h.find(c => c.ticker === ticker);
+    document.getElementById('current-ticker').textContent = ticker.toUpperCase() + (cd ? ` ($${Number(cd.close_price).toLocaleString(undefined, {maximumFractionDigits:2})})` : '');
+
+    const pctileBar = (label, value) => {
+      if (value == null) return '';
+      const color = value > 75 ? '#198754' : (value < 25 ? '#dc3545' : '#6c757d');
+      const textColor = value > 75 ? 'text-success' : (value < 25 ? 'text-danger' : '');
+      // Look up the historical up% for this bucket from the daily 52w data
+      const bucket = Math.floor(value / 10) * 10;
+      const tfKey = label === '52-Week' ? '52w' : label === '90-Day' ? '90d' : label === '31-Day' ? '31d' : label === '7-Day' ? '7d' : '24h';
+      const allRows = label === '24-Hour' ? (fourhData[tfKey] || []) : (dailyData[tfKey] || []);
+      const match = allRows.find(r => r.ticker === ticker && r.bucket === bucket);
+      const upPct = match ? match.up_pct : '?';
+      const upColor = match ? (match.up_pct > 53 ? 'text-success fw-bold' : (match.up_pct < 47 ? 'text-danger fw-bold' : '')) : '';
+      return `
+        <div class="col-md-4 col-lg">
+          <div class="text-muted small mb-1">${label}</div>
+          <div class="d-flex align-items-center gap-2">
+            <div class="flex-grow-1">
+              <div class="progress" style="height:20px">
+                <div class="progress-bar" style="width:${Math.min(value,100)}%;background:${color}" role="progressbar">
+                  <span class="small fw-medium">${value}%</span>
+                </div>
+              </div>
+            </div>
+            <div class="text-nowrap">
+              <span class="${upColor}" title="Historical up% at this percentile">${upPct}%</span>
+            </div>
+          </div>
+        </div>`;
+    };
+
+    let pctileHtml = '';
     if (cd) {
-      document.getElementById('current-label').textContent =
-        `Now: 52w=${cd.pctile_52w}% | 90d=${cd.pctile_90d}% | 31d=${cd.pctile_31d}% | 7d=${cd.pctile_7d || '?'}%`;
+      pctileHtml += pctileBar('52-Week', cd.pctile_52w);
+      pctileHtml += pctileBar('90-Day', cd.pctile_90d);
+      pctileHtml += pctileBar('31-Day', cd.pctile_31d);
+      pctileHtml += pctileBar('7-Day', cd.pctile_7d);
     }
+    if (c4) {
+      pctileHtml += pctileBar('24-Hour', c4.pctile_24h);
+    }
+    document.getElementById('current-pctiles').innerHTML = pctileHtml;
 
     // Render daily grids
     for (const tf of DAILY_TIMEFRAMES) {
