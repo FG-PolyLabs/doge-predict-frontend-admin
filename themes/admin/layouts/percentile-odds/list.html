@@ -1,0 +1,214 @@
+{{ define "main" }}
+<h2 class="h5 mb-2 fw-semibold">{{ .Title }}</h2>
+<p class="text-muted mb-4">Which price percentile positions yield the best up/down betting odds? Based on historical daily close data.</p>
+
+<div id="auth-guard" class="alert alert-warning d-none">
+  <i class="bi bi-lock me-1"></i>You must be <a href="{{ "" | relURL }}">signed in</a>.
+</div>
+<div id="loading" class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+
+<div id="content" class="d-none">
+  <!-- Current positions -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white fw-medium">Where Each Coin Sits Now</div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr><th class="ps-3">Ticker</th><th class="text-end">Price</th><th class="text-end">52w %ile</th><th class="text-end">90d %ile</th><th class="text-end pe-3">31d %ile</th></tr>
+        </thead>
+        <tbody id="current-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Ticker selector -->
+  <div class="mb-3">
+    <label class="form-label small fw-medium">Select token to view percentile odds:</label>
+    <select class="form-select" style="width:200px" id="ticker-select" onchange="renderAll()"></select>
+  </div>
+
+  <!-- 52-week grid -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white fw-medium">52-Week Percentile: Next-Day Up %</div>
+    <div class="card-body p-0">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr><th class="ps-3">Percentile</th><th class="text-end">Days</th><th class="text-end">Up</th><th class="text-end">Down</th><th class="text-end pe-3">Up %</th></tr>
+        </thead>
+        <tbody id="grid-52w"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body"><canvas id="chart-52w" height="200"></canvas></div>
+  </div>
+
+  <!-- 90-day grid -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white fw-medium">90-Day (Quarter) Percentile: Next-Day Up %</div>
+    <div class="card-body p-0">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr><th class="ps-3">Percentile</th><th class="text-end">Days</th><th class="text-end">Up</th><th class="text-end">Down</th><th class="text-end pe-3">Up %</th></tr>
+        </thead>
+        <tbody id="grid-90d"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body"><canvas id="chart-90d" height="200"></canvas></div>
+  </div>
+
+  <!-- 31-day grid -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white fw-medium">31-Day (Month) Percentile: Next-Day Up %</div>
+    <div class="card-body p-0">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr><th class="ps-3">Percentile</th><th class="text-end">Days</th><th class="text-end">Up</th><th class="text-end">Down</th><th class="text-end pe-3">Up %</th></tr>
+        </thead>
+        <tbody id="grid-31d"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body"><canvas id="chart-31d" height="200"></canvas></div>
+  </div>
+
+  <!-- Key insights -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white fw-medium">Betting Insights</div>
+    <div class="card-body" id="insights"></div>
+  </div>
+</div>
+{{ end }}
+
+{{ define "page-scripts" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+  let data52w = [], data90d = [], data31d = [], currentPctiles = [];
+  let charts = {};
+
+  firebase.auth().onAuthStateChanged(async user => {
+    if (!user) { document.getElementById('loading').classList.add('d-none'); document.getElementById('auth-guard').classList.remove('d-none'); return; }
+    await loadData();
+  });
+
+  async function loadData() {
+    try {
+      [data52w, data90d, data31d, currentPctiles] = await Promise.all([
+        api('GET', '/dashboard/percentile-updown'),
+        api('GET', '/dashboard/percentile-updown-90d'),
+        api('GET', '/dashboard/percentile-updown-31d'),
+        api('GET', '/dashboard/current-percentiles'),
+      ]);
+
+      document.getElementById('loading').classList.add('d-none');
+      document.getElementById('content').classList.remove('d-none');
+
+      // Current positions
+      document.getElementById('current-tbody').innerHTML = currentPctiles.map(s => {
+        const bar = v => {
+          const cls = v > 75 ? 'text-success fw-medium' : (v < 25 ? 'text-danger fw-medium' : '');
+          return `<td class="text-end ${cls}">${v}%</td>`;
+        };
+        return `<tr>
+          <td class="ps-3 fw-medium">${s.ticker.toUpperCase()}</td>
+          <td class="text-end">$${Number(s.close_price).toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+          ${bar(s.pctile_52w)}${bar(s.pctile_90d)}
+          <td class="text-end pe-3 ${s.pctile_31d > 75 ? 'text-success fw-medium' : (s.pctile_31d < 25 ? 'text-danger fw-medium' : '')}">${s.pctile_31d}%</td>
+        </tr>`;
+      }).join('');
+
+      // Ticker selector
+      const tickers = [...new Set(data52w.map(r => r.ticker))].sort();
+      const sel = document.getElementById('ticker-select');
+      sel.innerHTML = tickers.map(t => `<option value="${t}">${t.toUpperCase()}</option>`).join('');
+      sel.value = 'btc';
+
+      renderAll();
+    } catch (e) {
+      document.getElementById('loading').classList.add('d-none');
+      showToast('Failed to load: ' + e.message, 'danger');
+    }
+  }
+
+  function renderAll() {
+    const ticker = document.getElementById('ticker-select').value;
+    renderGrid('grid-52w', 'chart-52w', '52w', data52w.filter(r => r.ticker === ticker));
+    renderGrid('grid-90d', 'chart-90d', '90d', data90d.filter(r => r.ticker === ticker));
+    renderGrid('grid-31d', 'chart-31d', '31d', data31d.filter(r => r.ticker === ticker));
+    renderInsights(ticker);
+  }
+
+  function renderGrid(tbodyId, chartId, key, rows) {
+    const tbody = document.getElementById(tbodyId);
+    tbody.innerHTML = rows.map(r => {
+      const cls = r.up_pct > 53 ? 'text-success fw-bold' : (r.up_pct < 47 ? 'text-danger fw-bold' : '');
+      const bg = r.up_pct > 55 ? 'table-success' : (r.up_pct < 45 ? 'table-danger' : '');
+      return `<tr class="${bg}">
+        <td class="ps-3">${r.bucket}-${r.bucket+10}%</td>
+        <td class="text-end">${r.total_days}</td>
+        <td class="text-end text-success">${r.up_days}</td>
+        <td class="text-end text-danger">${r.down_days}</td>
+        <td class="text-end pe-3 ${cls}">${r.up_pct}%</td>
+      </tr>`;
+    }).join('');
+
+    // Chart
+    const labels = rows.map(r => `${r.bucket}-${r.bucket+10}%`);
+    const values = rows.map(r => r.up_pct);
+    const ctx = document.getElementById(chartId).getContext('2d');
+    if (charts[key]) charts[key].destroy();
+    charts[key] = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ label: 'Next-Day Up %', data: values,
+          backgroundColor: values.map(v => v >= 53 ? 'rgba(25,135,84,0.7)' : (v <= 47 ? 'rgba(220,53,69,0.7)' : 'rgba(108,117,125,0.4)')) }],
+      },
+      options: {
+        responsive: true,
+        scales: { y: { min: 40, max: 65, ticks: { callback: v => v + '%' } } },
+        plugins: { legend: { display: false } },
+      },
+    });
+  }
+
+  function renderInsights(ticker) {
+    const t52 = data52w.filter(r => r.ticker === ticker);
+    const t90 = data90d.filter(r => r.ticker === ticker);
+    const t31 = data31d.filter(r => r.ticker === ticker);
+
+    const best = (data, label) => {
+      if (!data.length) return null;
+      const b = data.reduce((a, c) => c.up_pct > a.up_pct ? c : a);
+      const w = data.reduce((a, c) => c.up_pct < a.up_pct ? c : a);
+      return { label, best_bucket: `${b.bucket}-${b.bucket+10}%`, best_pct: b.up_pct, best_days: b.total_days,
+               worst_bucket: `${w.bucket}-${w.bucket+10}%`, worst_pct: w.up_pct, worst_days: w.total_days };
+    };
+
+    const insights = [best(t52, '52-Week'), best(t90, '90-Day'), best(t31, '31-Day')].filter(Boolean);
+    const cp = currentPctiles.find(c => c.ticker === ticker);
+
+    let html = `<h6 class="fw-semibold">${ticker.toUpperCase()} Insights</h6>`;
+    if (cp) {
+      html += `<p class="mb-2">Current position: <strong>${cp.pctile_52w}%</strong> (52w), <strong>${cp.pctile_90d}%</strong> (90d), <strong>${cp.pctile_31d}%</strong> (31d)</p>`;
+    }
+    html += '<table class="table table-sm mb-0"><thead><tr><th>Timeframe</th><th>Best Decile</th><th>Up%</th><th>Worst Decile</th><th>Up%</th><th>Spread</th></tr></thead><tbody>';
+    for (const i of insights) {
+      const spread = (i.best_pct - i.worst_pct).toFixed(1);
+      html += `<tr>
+        <td>${i.label}</td>
+        <td class="text-success">${i.best_bucket} (${i.best_days}d)</td>
+        <td class="text-success fw-bold">${i.best_pct}%</td>
+        <td class="text-danger">${i.worst_bucket} (${i.worst_days}d)</td>
+        <td class="text-danger fw-bold">${i.worst_pct}%</td>
+        <td class="fw-bold">${spread}pp</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('insights').innerHTML = html;
+  }
+</script>
+{{ end }}
