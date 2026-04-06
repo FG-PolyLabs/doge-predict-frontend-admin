@@ -290,6 +290,25 @@
       `;
     }
 
+    // Buy YES + Sell Limit specific
+    if (r.sold_early_count !== undefined) {
+      const roiClass = r.roi_per_trade_pct >= 0 ? 'text-success' : 'text-danger';
+      stats += `
+      <div class="col-3 text-center mt-3"><div class="text-muted small">ROI per Trade</div><div class="fw-bold fs-5 ${roiClass}">${r.roi_per_trade_pct}%</div></div>
+      <div class="col-3 text-center mt-3"><div class="text-muted small">Total ROI</div><div class="fw-bold fs-5 ${roiClass}">${r.total_roi_pct}%</div></div>
+      <div class="col-3 text-center mt-3"><div class="text-muted small">Avg PnL / Fill</div><div class="fw-bold ${roiClass}">$${r.avg_pnl_per_filled}</div></div>
+      <div class="col-3 text-center mt-3"><div class="text-muted small">Capital Deployed</div><div class="fw-bold">$${r.total_capital_deployed}</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Filled (bought)</div><div class="fw-bold">${r.fill_rate_pct}% (${r.filled_count})</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Sold Early</div><div class="fw-bold text-primary">${r.sold_early_pct}% (${r.sold_early_count})</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Held - Won</div><div class="fw-bold text-success">${r.held_won_count}</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Held - Lost</div><div class="fw-bold text-danger">${r.held_lost_count}</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Spread Profit</div><div class="fw-bold">$${r.spread_profit} /trade</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Buy @</div><div class="fw-bold">${(r.buy_price*100).toFixed(0)}c</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Sell @</div><div class="fw-bold">${(r.sell_price*100).toFixed(0)}c</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Not Filled</div><div class="fw-bold text-muted">${r.not_filled_count}</div></div>
+      `;
+    }
+
     document.getElementById('result-stats').innerHTML = stats;
 
     // PnL chart
