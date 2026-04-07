@@ -359,9 +359,17 @@
     const tickersStr = document.getElementById('run-tickers').value.trim();
     const tickers = tickersStr ? tickersStr.split(',').map(t => t.trim()) : null;
 
+    // Collect current param values so the sweep has them (e.g. buy_price for buy+sell strategy)
+    const sweepParams = {};
+    for (const p of (strat.params || [])) {
+      const el = document.getElementById(`param-${p.key}`);
+      if (el) sweepParams[p.key] = parseFloat(el.value);
+    }
+
     try {
       const data = await api('POST', '/backtests/sweep', {
         strategy_id: stratId,
+        params: sweepParams,
         sweep_key: strat.sweep.key,
         sweep_min: parseFloat(document.getElementById('sweep-min').value),
         sweep_max: parseFloat(document.getElementById('sweep-max').value),
