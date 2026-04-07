@@ -309,6 +309,26 @@
       `;
     }
 
+    // Percentile conditional specific
+    if (r.qualified_count !== undefined) {
+      const roiClass = r.roi_per_trade_pct >= 0 ? 'text-success' : 'text-danger';
+      const wrClass = r.win_rate_of_filled > r.breakeven_win_rate ? 'text-success' : 'text-danger';
+      stats += `
+      <div class="col-3 text-center mt-3"><div class="text-muted small">ROI per Trade</div><div class="fw-bold fs-5 ${roiClass}">${r.roi_per_trade_pct}%</div></div>
+      <div class="col-3 text-center mt-3"><div class="text-muted small">Total ROI</div><div class="fw-bold fs-5 ${roiClass}">${r.total_roi_pct}%</div></div>
+      <div class="col-3 text-center mt-3"><div class="text-muted small">Qualified</div><div class="fw-bold">${r.qualified_count} of ${r.num_trades}</div></div>
+      <div class="col-3 text-center mt-3"><div class="text-muted small">Skipped (%ile)</div><div class="fw-bold text-muted">${r.skipped_pctile_count}</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Filled</div><div class="fw-bold">${r.filled_count} (${r.fill_rate_pct}%)</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Win Rate</div><div class="fw-bold ${wrClass}">${r.win_rate_of_filled}%</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Breakeven</div><div class="fw-bold">${r.breakeven_win_rate}%</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Avg PnL/Fill</div><div class="fw-bold ${roiClass}">$${r.avg_pnl_per_filled}</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Wins</div><div class="fw-bold text-success">${r.wins}</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Losses</div><div class="fw-bold text-danger">${r.losses}</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Percentile Range</div><div class="fw-bold">${r.min_pctile}-${r.max_pctile}% (${r.timeframe})</div></div>
+      <div class="col-3 text-center mt-2"><div class="text-muted small">Capital Deployed</div><div class="fw-bold">$${r.total_capital_deployed}</div></div>
+      `;
+    }
+
     document.getElementById('result-stats').innerHTML = stats;
 
     // PnL chart
