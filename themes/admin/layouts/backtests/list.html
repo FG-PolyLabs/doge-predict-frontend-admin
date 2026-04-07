@@ -382,24 +382,50 @@
     document.getElementById('sweep-title').textContent = `${strat.name} - Price Sweep (${data.results.length} prices)`;
 
     const tbody = document.getElementById('sweep-tbody');
+    const isBuySell = data.results[0] && data.results[0].sold_early_count !== undefined;
+
+    // Update table headers based on strategy
+    const thead = document.querySelector('#sweep-card thead tr');
+    if (isBuySell) {
+      thead.innerHTML = `<th class="ps-3">Price</th><th class="text-end">Filled</th><th class="text-end">Fill%</th><th class="text-end">Sold Early</th><th class="text-end">Held Won</th><th class="text-end">Held Lost</th><th class="text-end">PnL</th><th class="text-end">ROI/Trade</th><th class="text-end pe-3">Total ROI</th>`;
+    } else {
+      thead.innerHTML = `<th class="ps-3">Price</th><th class="text-end">Filled</th><th class="text-end">Fill%</th><th class="text-end">Wins</th><th class="text-end">Losses</th><th class="text-end">Win Rate</th><th class="text-end">Breakeven</th><th class="text-end">PnL</th><th class="text-end">ROI/Trade</th><th class="text-end pe-3">Total ROI</th>`;
+    }
+
     tbody.innerHTML = data.results.map(r => {
       const roiClass = (r.roi_per_trade_pct || 0) >= 0 ? 'text-success' : 'text-danger';
       const pnlClass = r.total_pnl >= 0 ? 'text-success' : 'text-danger';
-      const wrFilled = r.win_rate_of_filled || 0;
-      const be = r.breakeven_win_rate || 0;
-      const wrClass = wrFilled > be ? 'text-success' : 'text-danger';
-      return `<tr>
-        <td class="ps-3 fw-medium">${(r.param_value*100).toFixed(0)}c</td>
-        <td class="text-end">${r.filled_count || 0}</td>
-        <td class="text-end">${r.fill_rate_pct || 0}%</td>
-        <td class="text-end text-success">${r.wins || 0}</td>
-        <td class="text-end text-danger">${r.losses || 0}</td>
-        <td class="text-end ${wrClass}">${wrFilled}%</td>
-        <td class="text-end">${be}%</td>
-        <td class="text-end ${pnlClass}">$${r.total_pnl.toFixed(2)}</td>
-        <td class="text-end ${roiClass}">${r.roi_per_trade_pct || 0}%</td>
-        <td class="text-end pe-3 ${roiClass}">${r.total_roi_pct || 0}%</td>
-      </tr>`;
+
+      if (isBuySell) {
+        const soldPct = r.filled_count ? ((r.sold_early_count / r.filled_count) * 100).toFixed(0) : 0;
+        return `<tr>
+          <td class="ps-3 fw-medium">${(r.param_value*100).toFixed(0)}c</td>
+          <td class="text-end">${r.filled_count || 0}</td>
+          <td class="text-end">${r.fill_rate_pct || 0}%</td>
+          <td class="text-end text-primary">${r.sold_early_count || 0} (${soldPct}%)</td>
+          <td class="text-end text-success">${r.held_won_count || 0}</td>
+          <td class="text-end text-danger">${r.held_lost_count || 0}</td>
+          <td class="text-end ${pnlClass}">$${r.total_pnl.toFixed(2)}</td>
+          <td class="text-end ${roiClass}">${r.roi_per_trade_pct || 0}%</td>
+          <td class="text-end pe-3 ${roiClass}">${r.total_roi_pct || 0}%</td>
+        </tr>`;
+      } else {
+        const wrFilled = r.win_rate_of_filled || 0;
+        const be = r.breakeven_win_rate || 0;
+        const wrClass = wrFilled > be ? 'text-success' : 'text-danger';
+        return `<tr>
+          <td class="ps-3 fw-medium">${(r.param_value*100).toFixed(0)}c</td>
+          <td class="text-end">${r.filled_count || 0}</td>
+          <td class="text-end">${r.fill_rate_pct || 0}%</td>
+          <td class="text-end text-success">${r.wins || 0}</td>
+          <td class="text-end text-danger">${r.losses || 0}</td>
+          <td class="text-end ${wrClass}">${wrFilled}%</td>
+          <td class="text-end">${be}%</td>
+          <td class="text-end ${pnlClass}">$${r.total_pnl.toFixed(2)}</td>
+          <td class="text-end ${roiClass}">${r.roi_per_trade_pct || 0}%</td>
+          <td class="text-end pe-3 ${roiClass}">${r.total_roi_pct || 0}%</td>
+        </tr>`;
+      }
     }).join('');
 
     // Chart
